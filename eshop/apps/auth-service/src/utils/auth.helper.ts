@@ -4,6 +4,9 @@ import redis from "@packages/libs/redis";
 import { sendEmail } from "./sendMail";
 import { Request, Response, NextFunction } from "express";
 import prisma from "@packages/libs/prisma";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { setCookie } from "./cookies/setCookie";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -140,6 +143,127 @@ export const handleForgotPassword = async (
         });
 
     } catch (error) {
+        next(error);
+    }
+};
+
+export const verifyForgotPasswordOtp = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            throw new ValidationError("Email and OTP are required!");
+        }
+
+        const isValid = await verifyOtp(email, otp, next);
+        if (!isValid) return;
+
+        res.status(200).json({
+            success: true,
+            message: "OTP verified successfully! You can now reset your password.",
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const handleResetPassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    userType: "user" | "seller"
+) => {
+    try {
+        const { email, newPassword } = req.body;
+
+        if (!email || !newPassword) {
+            throw new ValidationError("Email and new password are required!");
+        }
+
+        // Find user/seller in DB
+        const user =
+            userType === "user"
+                ? await prisma.users.findUnique({ where: { email } })
+                : await prisma.seller.findUnique({ where: { email } });
+
+        if (!user) throw new ValidationError(`No ${userType} found with this email!`);
+
+        // Prevent reusing the same password
+        const isSamePassword = await bcrypt.compare(newPassword, user.password!);
+        if (isSamePassword) {
+            throw new ValidationError("New password cannot be the same as the old password!");
+        }
+
+        // Hash and save new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        if (userType === "user") {
+            await prisma.users.update({ where: { email }, data: { password: hashedPassword } });
+        } else {
+            await prisma.seller.update({ where: { email }, data: { password: hashedPassword } });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Password reset successfully!",
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const refreshToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const token = req.cookies?.refresh_token;
+
+        if (!token) {
+            throw new ValidationError("Refresh token not found! Please log in again.");
+        }
+
+        // Verify the refresh token
+        const decoded = jwt.verify(
+            token,
+            process.env.REFRESH_TOKEN_SECRET as string
+        ) as { id: string; role?: string };
+
+        if ( !decoded || !decoded?.id || !decoded?.role) {
+            throw new ValidationError("Invalid refresh token! Please log in again.");
+        }
+
+        const user = await prisma.users.findUnique({ where: { id: decoded.id } });
+        if (!user) {
+            throw new ValidationError("User not found! Please log in again.");
+        }
+
+        // Issue a new access token
+        const newAccessToken = jwt.sign(
+            { id: decoded.id, role: decoded.role ?? "user" },
+            process.env.ACCESS_TOKEN_SECRET as string,
+            { expiresIn: "15m" }
+        );
+
+        // Set new access token in cookie
+        setCookie(res, "access_token", newAccessToken);
+
+        res.status(200).json({
+            success: true,
+            message: "Access token refreshed successfully!",
+        });
+
+    } catch (error) {
+        // jwt.verify throws on expiry/invalid — treat as auth failure
+        if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+            return next(new ValidationError("Invalid or expired refresh token! Please log in again."));
+        }
         next(error);
     }
 };

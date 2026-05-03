@@ -6,11 +6,14 @@ import CartIcon from '../../../assets/svgs/cart-icon';
 import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import HeaderBottom from './header-bottom';
+import useUser from 'apps/user-ui/src/hooks/useUser';
 
 const Header = () => {
   const [searchValue, setSearchValue] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+  const { user, isloading } = useUser(); // ✅ Moved out of nested function
 
   /* Lock body scroll when mobile drawer is open */
   useEffect(() => {
@@ -20,10 +23,6 @@ const Header = () => {
 
   return (
     <>
-      {/*
-        The top bar is NOT sticky — it scrolls away naturally.
-        HeaderBottom takes over as a fixed bar once the top bar leaves the viewport.
-      */}
       <header className="w-full bg-white shadow-sm">
 
         {/* ── Top bar ──────────────────────────────────────── */}
@@ -106,15 +105,28 @@ const Header = () => {
           </Link>
 
           {/* Profile */}
-          <Link href="/login" className="flex items-center gap-2 group" aria-label="Sign in">
-            <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 group-hover:bg-blue-50 group-hover:text-blue-700 text-gray-600 transition-all duration-200">
-              <ProfileIcon className="w-5 h-5" />
-            </div>
-            <div className="leading-tight hidden md:block">
-              <span className="block text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Hello,</span>
-              <span className="block text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">Sign In</span>
-            </div>
-          </Link>
+          {!isloading && user ? (
+            <Link href="/profile" className="flex items-center gap-2 group" aria-label="Go to profile">
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 group-hover:bg-blue-50 group-hover:text-blue-700 text-gray-600 transition-all duration-200">
+                <ProfileIcon className="w-5 h-5" />
+              </div>
+              <div className="leading-tight hidden md:block">
+                <span className="block text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Hello,</span>
+                <span className="block text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">{user?.name.split(" ")[0]}</span>
+              </div>
+            </Link>
+          ) : (
+            <Link href="/login" className="flex items-center gap-2 group" aria-label="Sign in">
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 group-hover:bg-blue-50 group-hover:text-blue-700 text-gray-600 transition-all duration-200">
+                <ProfileIcon className="w-5 h-5" />
+              </div>
+              <div className="leading-tight hidden md:block">
+                <span className="block text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Hello,</span>
+                <span className="block text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">{isloading ? '...' : 'Sign In'}</span>
+              </div>
+            </Link>
+          )}
+
         </div>
 
         {/* ── Mobile inline search bar ─────────────────────── */}
@@ -196,7 +208,7 @@ const Header = () => {
           {/* Quick links */}
           <div className="px-5 pt-4 pb-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Menu</p>
-            {([["Today's Deals", "/deals", "🏷️"], ["Best Sellers", "/bestsellers", "⭐"], ["Customer Service", "/customer-service", "💬"], ["Gift Cards", "/gift-cards", "🎁"], ["Sell on SokoJamo", "/sell", "🛍️"], ["Wishlist", "/wishlist", "♡"]] as [string, string, string][]).map(([label, href, icon]) => (
+            {([ ["Today's Deals", "/deals", "🏷️"], ["Best Sellers", "/bestsellers", "⭐"], ["Customer Service", "/customer-service", "💬"], ["Gift Cards", "/gift-cards", "🎁"], ["Sell on SokoJamo", "/sell", "🛍️"], ["Wishlist", "/wishlist", "♡"] ] as [string, string, string][]).map(([label, href, icon]) => (
               <Link
                 key={href}
                 href={href}

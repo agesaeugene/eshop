@@ -1,9 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
-import { checkOtpRestrictions, handleForgotPassword, sendOtp, trackOtpRequests, validateRegistrationData, verifyOtp } from '../utils/auth.helper';
+import { checkOtpRestrictions, handleForgotPassword, sendOtp, trackOtpRequests, validateRegistrationData, verifyOtp, verifyForgotPasswordOtp, handleResetPassword,
+    refreshToken as refreshTokenHelper, } from '../utils/auth.helper';
 import prisma from '@packages/libs/prisma';
 import { AuthError, ValidationError } from '@packages/error-handler';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 import { setCookie } from '../utils/cookies/setCookie';
 
 // Register a new User
@@ -114,6 +115,77 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
     } catch (error) {
         console.error("LOGIN ERROR:", error);
         return next(error);
+    }
+};
+
+export const refreshToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const token = req.cookies?.refresh_token;
+
+        if (!token) {
+            throw new ValidationError("Refresh token not found! Please log in again.");
+        }
+
+        // Verify the refresh token
+        const decoded = jwt.verify(
+            token,
+            process.env.REFRESH_TOKEN_SECRET as string
+        ) as { id: string; role?: string };
+
+        if (!decoded || !decoded?.id || !decoded?.role) {
+            throw new JsonWebTokenError("Forbiden! Invalid refresh token! Please log in again.");
+        }
+
+       // let account;
+       // if (decoded.role === "user") {
+       //     account = await prisma.users.findUnique({ where: { id: decoded.id } });
+       // } else {
+       //     account = await prisma.seller.findUnique({ where: { id: decoded.id } });
+       // }
+       
+       const user = await prisma.users.findUnique({ where: { id: decoded.id } });
+        if (!user) {
+            throw new AuthError("User/Seller not found! Please log in again.");
+        }
+
+        // Issue a new access token
+        const newAccessToken = jwt.sign(
+            { id: decoded.id, role: decoded.role ?? "user" },
+            process.env.ACCESS_TOKEN_SECRET as string,
+            { expiresIn: "15m" }
+        );
+
+        // Set new access token in cookie
+        setCookie(res, "access_token", newAccessToken);
+
+        res.status(200).json({
+            success: true,
+            message: "Access token refreshed successfully!",
+        });
+
+    } catch (error) {
+        // jwt.verify throws on expiry/invalid — treat as auth failure
+        if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+            return next(new ValidationError("Invalid or expired refresh token! Please log in again."));
+        }
+        next(error);
+    }
+};
+
+//Getting the logges in user
+export const getUser = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user;
+        res.status(201).json({
+            success: true,
+            user,
+        });
+    } catch (error) {
+        next(error);
     }
 };
 

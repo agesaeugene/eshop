@@ -1,6 +1,8 @@
 import Header from '../shared/widgets/header/header';
 import './global.css';
 import {Poppins, Roboto} from "next/font/google";
+import Providers from './providers';
+ 
 
 export const metadata = {
   title: 'SokoJamo',
@@ -23,8 +25,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${roboto.variable} ${poppins.variable} font-sans bg-gray-50`}>
+        <Providers>
         <Header />
         {children}
+        </Providers>
       </body>
     </html>
   )
