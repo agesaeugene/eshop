@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "npx nx run-many --target=serve --all",
     "auth-docs": "node apps/auth-service/src/swagger.js",
-    "user-ui": "npx nx run-many --target=dev --projects=user-ui"
+    "user-ui": "npx nx run-many --target=dev --projects=user-ui",
+    "seller-ui": "npx nx run-many --target=dev --projects=seller-ui"
   },
   "private": true,
   "dependencies": {
@@ -36,16 +37,19 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@nx/devkit": "22.7.1",
     "@nx/docker": "22.6.3",
-    "@nx/esbuild": "^22.6.5",
-    "@nx/express": "^22.6.5",
-    "@nx/jest": "^22.6.5",
-    "@nx/js": "22.6.3",
-    "@nx/next": "^22.6.5",
-    "@nx/node": "^22.6.5",
-    "@nx/web": "^22.6.5",
-    "@nx/webpack": "^22.6.5",
+    "@nx/esbuild": "^22.6.3",
+    "@nx/express": "^22.6.3",
+    "@nx/jest": "^22.6.3",
+    "@nx/js": "22.7.1",
+    "@nx/next": "22.7.1",
+    "@nx/node": "^22.6.3",
+    "@nx/playwright": "^22.6.5",
+    "@nx/web": "^22.6.3",
+    "@nx/webpack": "^22.6.3",
     "@nx/workspace": "22.6.3",
+    "@playwright/test": "^1.36.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
     "@svgr/webpack": "^8.0.1",
     "@swc-node/register": "1.11.1",

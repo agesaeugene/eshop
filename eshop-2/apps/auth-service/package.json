@@ -1,0 +1,45 @@
+{
+  "name": "@eshop/auth-service",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "node src/main.ts"
+  },
+  "nx": {
+    "name": "auth-service",
+    "projectType": "application",
+    "sourceRoot": "auth-service/src",
+    "targets": {
+      "serve": {
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "buildTarget": "@eshop/auth-service:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "buildTarget": "@eshop/auth-service:build"
+          },
+          "production": {
+            "buildTarget": "@eshop/auth-service:build"
+          }
+        }
+      },
+      "test": {
+        "options": {
+          "passWithNoTests": true
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "cors": "^2.8.6"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19"
+  }
+}

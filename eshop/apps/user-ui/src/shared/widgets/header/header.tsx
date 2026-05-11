@@ -13,7 +13,7 @@ const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-  const { user, isloading } = useUser(); // ✅ Moved out of nested function
+  const { user, isloading } = useUser();
 
   /* Lock body scroll when mobile drawer is open */
   useEffect(() => {

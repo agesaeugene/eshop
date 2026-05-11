@@ -17,6 +17,12 @@
     },
     {
       "path": "./apps/user-ui"
+    },
+    {
+      "path": "./apps/seller-ui-e2e"
+    },
+    {
+      "path": "./apps/seller-ui"
     }
   ]
 }
