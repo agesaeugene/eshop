@@ -115,10 +115,11 @@ export const handleForgotPassword = async (
         if (!email) throw new ValidationError("Email is required!");
 
         // Find user/seller in DB
+        // FIX: prisma.seller → prisma.sellers  (must match the plural model name used throughout the codebase)
         const user =
             userType === "user"
                 ? await prisma.users.findUnique({ where: { email } })
-                : await prisma.seller.findUnique({ where: { email } }); 
+                : await prisma.sellers.findUnique({ where: { email } });
 
         if (!user) throw new ValidationError(`No ${userType} found with this email!`);
 
@@ -185,10 +186,11 @@ export const handleResetPassword = async (
         }
 
         // Find user/seller in DB
+        // FIX: prisma.seller → prisma.sellers  (must match the plural model name used throughout the codebase)
         const user =
             userType === "user"
                 ? await prisma.users.findUnique({ where: { email } })
-                : await prisma.seller.findUnique({ where: { email } });
+                : await prisma.sellers.findUnique({ where: { email } });
 
         if (!user) throw new ValidationError(`No ${userType} found with this email!`);
 
@@ -204,7 +206,8 @@ export const handleResetPassword = async (
         if (userType === "user") {
             await prisma.users.update({ where: { email }, data: { password: hashedPassword } });
         } else {
-            await prisma.seller.update({ where: { email }, data: { password: hashedPassword } });
+            // FIX: prisma.seller → prisma.sellers
+            await prisma.sellers.update({ where: { email }, data: { password: hashedPassword } });
         }
 
         res.status(200).json({

@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "next": "^16.2.1",
+    "next": "^9.3.3",
+    "nx": "22.6.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }
