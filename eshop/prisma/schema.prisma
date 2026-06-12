@@ -50,7 +50,7 @@ model shops {
   id            String        @id @default(auto()) @map("_id") @db.ObjectId
   name          String
   bio           String?
-  gategory      String
+  category      String
   avatar        images?               
   coverBanner   String?
   address       String
@@ -71,8 +71,8 @@ model sellers {
   email        String   @unique
   phone_number String
   country      String
-  stripeId     String?
-  MpesaId      String?
+  mpesa_number   String?
+  phone_verified Boolean @default(false)
   password     String
   shop         shops?           
   createdAt    DateTime @default(now())

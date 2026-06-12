@@ -52,3 +52,5 @@ test-output
 out
 .nx/polygraph
 .nx/self-healing
+/home/eugene/projects/eshop/eshop/apps/seller-ui/.env
+/home/eugene/projects/eshop/eshop/apps/user-ui/.env

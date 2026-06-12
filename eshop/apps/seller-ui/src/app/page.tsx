@@ -1,5 +1,5 @@
 "use client";
-import GoogleButton from 'apps/user-ui/src/shared/components/google-button';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import React from 'react'
@@ -46,7 +46,7 @@ const Login = () => {
   };
 
   return (
-    <div className="w-full py-16 min-h-[85vh] bg-[#f1f1f1] flex flex-col items-center">
+    <div className="w-full py-16 min-h-screen bg-[#f1f1f1] flex flex-col items-center">
       <h1 className="text-4xl font-poppins font-semibold text-black text-center mb-2">Login</h1>
       <p className="text-center text-lg font-medium py-3 text-[#00000099] mb-6">
         Home . Login
@@ -60,7 +60,6 @@ const Login = () => {
             <Link href="/signUp" className="text-blue-500 ml-1 hover:underline">Sign Up</Link>
           </p>
 
-          <GoogleButton />
 
           <div className="flex items-center my-5 text-gray-400 text-sm">
             <div className="flex-1 border-t border-gray-300" />
