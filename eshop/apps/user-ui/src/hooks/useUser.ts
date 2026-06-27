@@ -1,7 +1,6 @@
 import {useQuery} from '@tanstack/react-query';
 import axiosInstance from '../utils/axiosInstance';
-import { use } from 'react';
-import { query } from 'express';
+
 
 //fetching user data
 const fetchUser = async () => {

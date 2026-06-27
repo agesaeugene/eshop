@@ -30,7 +30,8 @@ const isAuthenticated = async (req: any, res: Response, next: NextFunction) => {
             }
             req.seller = seller;
             req.user = seller; // keep req.user populated too for generic middleware
-        } else {
+        } else if (decoded.role === "user" || !decoded.role) {
+            // FIX: explicit check instead of bare else, so future roles don't silently fall through as "user"
             const user = await prisma.users.findUnique({ where: { id: decoded.id } });
             if (!user) {
                 return res.status(401).json({ message: "Unauthorized: User account not found" });

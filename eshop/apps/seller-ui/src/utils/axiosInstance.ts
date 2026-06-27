@@ -1,6 +1,5 @@
 import axios from "axios";
-import { error } from "console";
-import { refresh } from "next/cache";
+
 
 const axiosInstance = axios.create({
     baseURL: process.env.NEXT_PUBLIC_SERVER_URI,

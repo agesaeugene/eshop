@@ -23,17 +23,17 @@ const Login = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors }, 
+    formState: { errors },
   } = useForm<FormData>();
 
   const loginMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URI}/api/login-user`, data, { withCredentials: true });
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URI}/api/login-seller`, data, { withCredentials: true });
       return response.data;
     },
     onSuccess: (data) => {
       setServerError(null);
-      router.push("/");
+      router.push("/dashboard");
     },
     onError: (error: AxiosError) => {
       const errorMessage = (error.response?.data as { message?: string })?.message || "Invalid credentials";

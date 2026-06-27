@@ -172,24 +172,38 @@ export const refreshToken = async (
     next: NextFunction
 ) => {
     try {
-        const token = req.cookies?.refresh_token;
+        const refreshToken =
+        req.cookies["refresh_token"] ||
+        req.cookies["seller-refresh-token"] ||
+        req.headers.authorization?.split(" ")[1];
 
-        if (!token) {
+        if (!refreshToken) {
             throw new ValidationError("Refresh token not found! Please log in again.");
         }
 
         // Verify the refresh token
         const decoded = jwt.verify(
-            token,
+            refreshToken,
             process.env.REFRESH_TOKEN_SECRET as string
         ) as { id: string; role?: string };
 
-        if (!decoded || !decoded?.id) {
+        if (!decoded || !decoded.id || !decoded.role) {
             throw new JsonWebTokenError("Forbidden! Invalid refresh token! Please log in again.");
         }
 
-        const user = await prisma.users.findUnique({ where: { id: decoded.id } });
-        if (!user) {
+        let account;
+
+        if (decoded.role === "user") {
+            account = await prisma.users.findUnique({ where: { id: decoded.id } });
+        } else if (decoded.role === "seller") {
+            account = await prisma.sellers.findUnique({
+                where: { id: decoded.id },
+                include: { shop: true },
+            });
+        }
+
+        
+        if (!account) {
             throw new AuthError("User not found! Please log in again.");
         }
 
@@ -201,7 +215,13 @@ export const refreshToken = async (
         );
 
         // Set new access token in cookie
-        setCookie(res, "access_token", newAccessToken);
+        if(decoded.role === "user") {
+            setCookie(res, "access_token", newAccessToken)
+        } else if (decoded.role === "seller") {
+            setCookie(res, "seller-access-token", newAccessToken)
+        }
+
+      
 
         res.status(200).json({
             success: true,
@@ -317,7 +337,7 @@ export const refreshSellerToken = async (
             process.env.REFRESH_TOKEN_SECRET as string
         ) as { id: string; role?: string };
 
-        if (!decoded?.id) {
+        if (!decoded?.id || decoded.role !== "seller") {
             throw new JsonWebTokenError("Forbidden! Invalid refresh token!");
         }
 
