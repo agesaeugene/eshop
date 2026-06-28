@@ -24,12 +24,16 @@ const isAuthenticated = async (req: any, res: Response, next: NextFunction) => {
         }
 
         if (decoded.role === "seller") {
-            const seller = await prisma.sellers.findUnique({ where: { id: decoded.id } });
+            const seller = await prisma.sellers.findUnique({
+                where: { id: decoded.id },
+                include: { shop: true },
+            });
             if (!seller) {
                 return res.status(401).json({ message: "Unauthorized: Seller account not found" });
             }
             req.seller = seller;
             req.user = seller; // keep req.user populated too for generic middleware
+            req.role = "seller";
         } else if (decoded.role === "user" || !decoded.role) {
             // FIX: explicit check instead of bare else, so future roles don't silently fall through as "user"
             const user = await prisma.users.findUnique({ where: { id: decoded.id } });
@@ -37,6 +41,7 @@ const isAuthenticated = async (req: any, res: Response, next: NextFunction) => {
                 return res.status(401).json({ message: "Unauthorized: User account not found" });
             }
             req.user = user;
+            req.role = "user";
         }
 
         return next();

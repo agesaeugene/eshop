@@ -138,6 +138,9 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
             return next(new AuthError("Invalid email or password!"));
         }
 
+        res.clearCookie("seller-access-token");
+        res.clearCookie("seller-refresh-token");
+
         // Generating access and refresh tokens
         const accessToken = jwt.sign(
             { id: user.id, role: "user" },
@@ -167,7 +170,7 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
 };
 
 export const refreshToken = async (
-    req: Request,
+    req: any,
     res: Response,
     next: NextFunction
 ) => {
@@ -220,6 +223,8 @@ export const refreshToken = async (
         } else if (decoded.role === "seller") {
             setCookie(res, "seller-access-token", newAccessToken)
         }
+
+        req.role = decoded.role;
 
       
 
@@ -549,6 +554,9 @@ export const loginSeller = async (
         const isMatch = await bcrypt.compare(password, seller.password!);
         if (!isMatch)
             return next(new ValidationError("Invalid Email or Password"));
+
+        res.clearCookie("access_token");
+        res.clearCookie("refresh_token");
 
         //Generating access tokens and refresh token
         const accessToken = jwt.sign(

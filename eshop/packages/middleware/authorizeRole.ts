@@ -1,15 +1,16 @@
+import { AuthError } from "@packages/error-handler";
 import { NextFunction, Response } from "express";
 
 export const isSeller = (req: any, res: Response, next: NextFunction) => {
-    if (req.seller || req.user?.role === "seller") {
-        return next();
+    if (req.role !== "seller") {
+        return next(new AuthError("Access denied: sellers only"));
     }
-    return res.status(403).json({ message: "Forbidden: Seller access required" });
+    next();
 };
 
 export const isUser = (req: any, res: Response, next: NextFunction) => {
-    if (req.user && req.user.role !== "seller") {
-        return next();
+    if (req.role !== "user") {
+        return next(new AuthError("Access denied: users only"));
     }
-    return res.status(403).json({ message: "Forbidden: User access required" });
+    next();
 };

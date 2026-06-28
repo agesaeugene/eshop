@@ -33,7 +33,7 @@ const Login = () => {
     },
     onSuccess: (data) => {
       setServerError(null);
-      router.push("/dashboard");
+      router.push("/");
     },
     onError: (error: AxiosError) => {
       const errorMessage = (error.response?.data as { message?: string })?.message || "Invalid credentials";
