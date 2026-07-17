@@ -37,11 +37,14 @@ const ColorSelector = ({ control, errors }: any) => {
                         })}
 
                         {/* Adding new color */}
-                        <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full border-2 border-gray-500 bg-gray-800 hover:bg-gray-700 transition">
+                        <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full border-2 border-gray-500 bg-gray-800 hover:bg-gray-700 transition"
+                        onClick={() => setShowColorPicker(!showColorPicker)}
+                        >
                             <Plus size={16} color="white" />
                         </button>
                         {/* Color Picker */}
-                        <div className="relative flex items-center gap-2">
+                        {showColorPicker && (
+                            <div className="relative flex items-center gap-2">
                             <input
                                 type="color"
                                 value={newColor}
@@ -57,6 +60,7 @@ const ColorSelector = ({ control, errors }: any) => {
                                 Add
                             </button>
                         </div>
+                        )}
                     </div>
                 )}
             />

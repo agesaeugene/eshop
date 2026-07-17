@@ -17,7 +17,7 @@ router.post("/verify-mpesa", verifyMpesa);
 // User auth
 router.post("/user-registration", userRegistration);
 router.post("/verify-user", verifyUser);
-router.post("/login-user", loginUser);router.post("/refresh-token-user", refreshToken);
+router.post("/login-user", loginUser);
 router.post("/refresh-token-user", refreshToken);
 router.get("/logged-in-user", isAuthenticated, getUser);
 router.post("/forgot-password-user", userForgotPassword);
