@@ -18,7 +18,8 @@
     "strict": true,
     "target": "es2022",
     "paths": {
-      "@packages/*": ["packages/*"]
+      "@packages/*": ["packages/*"],
+      
     },
     "customConditions": ["@eshop/source"]
   }

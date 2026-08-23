@@ -9,9 +9,13 @@ import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import Input from 'packages/compoonents/input';
 import { AxiosError } from 'axios';
+import DeleteDiscountCodeModal from 'apps/seller-ui/src/shared/components/modals/delete.discount-codes';
 
 const Page = () => {
     const [showModal, setShowModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [selectedDiscount, setSelectedDiscount] = useState<any>(null);
+
     const queryClient = useQueryClient();
 
     const { data: discountCodes = [], isLoading } = useQuery({
@@ -45,11 +49,37 @@ const Page = () => {
             queryClient.invalidateQueries({ queryKey: ["shop-discounts"] });
             reset();
             setShowModal(false);
+            toast.success("Discount code created successfully!");
+        },
+        onError: (error: AxiosError<{ message: string }>) => {
+            toast.error(error?.response?.data?.message || "Something went wrong");
         },
     });
 
-    const handleDeleteClick = async (discount: any) => {
-        console.log('');
+    const deleteDiscountCodeMutation = useMutation({
+        mutationFn: async (discountId: string) => {
+            await axiosInstance.delete(`/product/api/delete-discount-code/${discountId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["shop-discounts"] });
+            setShowDeleteModal(false);
+            setSelectedDiscount(null);
+            toast.success("Discount code deleted successfully!");
+        },
+        onError: (error: AxiosError<{ message: string }>) => {
+            toast.error(error?.response?.data?.message || "Failed to delete discount code");
+        },
+    });
+
+    const handleDeleteClick = (discount: any) => {
+        setSelectedDiscount(discount);
+        setShowDeleteModal(true);
+    };
+
+    const handleConfirmDelete = () => {
+        if (selectedDiscount?.id) {
+            deleteDiscountCodeMutation.mutate(selectedDiscount.id);
+        }
     };
 
     const onSubmit = (data: any) => {
@@ -237,6 +267,19 @@ const Page = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Delete Discount modal */}
+            {showDeleteModal && selectedDiscount && (
+                <DeleteDiscountCodeModal
+                    discount={selectedDiscount}
+                    onClose={() => {
+                        setShowDeleteModal(false);
+                        setSelectedDiscount(null);
+                    }}
+                    onConfirm={handleConfirmDelete}
+                    isDeleting={deleteDiscountCodeMutation.isPending}
+                />
             )}
         </div>
     );
