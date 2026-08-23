@@ -57,7 +57,7 @@ const Header = () => {
               <style>{`
                 .search-wrapper .search-input { width: 0; transition: width 0.4s ease; background: transparent; border: none; outline: none; color: #fff; font-family: inherit; padding: 0; }
                 .search-input::placeholder { color: #ccd9f5; }
-                .search-wrapper:hover .search-input, .search-wrapper:focus-within .search-input { width: 180px; padding: 0 8px; }
+                .search-wrapper:hover .search-input, .search-wrapper:focus-within .search-input { width: 320px; padding: 0 8px; }
               `}</style>
               <div className="search-wrapper flex items-center gap-2">
                 <input
