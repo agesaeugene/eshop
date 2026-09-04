@@ -7,6 +7,7 @@ import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import HeaderBottom from './header-bottom';
 import useUser from 'apps/user-ui/src/hooks/useUser';
+import { useStore } from 'apps/user-ui/src/store';
 
 const Header = () => {
   const [searchValue, setSearchValue] = useState('');
@@ -14,6 +15,9 @@ const Header = () => {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   const { user, isloading } = useUser();
+  const wishlist = useStore((state: any) => state.wishlist);
+  const cart = useStore((state: any) => state.cart);
+
 
   /* Lock body scroll when mobile drawer is open */
   useEffect(() => {
@@ -25,7 +29,7 @@ const Header = () => {
     <>
       <header className="w-full bg-white shadow-sm">
 
-        {/* ── Top bar ──────────────────────────────────────── */}
+        {/* ── Top bar */}
         <div className="w-[92%] max-w-7xl py-3 mx-auto flex items-center gap-3">
 
           {/* Hamburger */}
@@ -90,13 +94,13 @@ const Header = () => {
           {/* Wishlist */}
           <Link href="/wishlist" className="relative hidden sm:flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 group">
             <HeartIcon className="w-5 h-5 text-gray-600 group-hover:text-red-500 transition-colors duration-200" />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">0</span>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{wishlist?.length}</span>
           </Link>
 
           {/* Cart */}
           <Link href="/cart" className="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 group">
             <CartIcon className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors duration-200" />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">0</span>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{cart?.length}</span>
           </Link>
 
           {/* Sell (desktop only) */}
@@ -161,77 +165,161 @@ const Header = () => {
         <div className="border-b border-slate-200" />
       </header>
 
-      {/* ── Mobile drawer backdrop ───────────────────────── */}
+      {/* Mobile drawer backdrop */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
-      {/* ── Mobile drawer (slides in from left) ─────────── */}
+      {/* Mobile drawer */}
       <div
-        className={`fixed top-0 left-0 h-full w-[80%] max-w-xs bg-white z-50 md:hidden shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed top-0 left-0 h-full w-[82%] max-w-sm bg-white z-50 md:hidden shadow-xl flex flex-col transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         {/* Drawer header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="text-xl font-semibold text-gray-900">SokoJamo</span>
+          <Link
+            href="/"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="text-xl font-semibold tracking-tight text-gray-900"
+          >
+            SokoJamo
+          </Link>
+
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
             aria-label="Close menu"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 6l12 12M18 6L6 18"
+              />
             </svg>
           </button>
         </div>
 
-        {/* Sign-in strip */}
-        <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-5 py-3 bg-blue-50 hover:bg-blue-100 transition-colors">
-          <div className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white">
+        {/* Account */}
+        <Link
+          href={user ? "/profile" : "/login"}
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 text-gray-600">
             <ProfileIcon className="w-5 h-5" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-blue-800">Sign In</p>
-            <p className="text-xs text-blue-600">Access your account</p>
+
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">
+              {user ? user.name?.split(" ")[0] : "Sign in"}
+            </p>
+            <p className="text-xs text-gray-500">
+              {user ? "View your account" : "Access your account"}
+            </p>
           </div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-auto text-blue-400">
-            <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            className="w-4 h-4 ml-auto text-gray-400"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 18l6-6-6-6"
+            />
           </svg>
         </Link>
 
-        {/* Scrollable nav content */}
-        <div className="flex-1 overflow-y-auto pb-6">
-          {/* Quick links */}
-          <div className="px-5 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Menu</p>
-            {([ ["Today's Deals", "/deals", "🏷️"], ["Best Sellers", "/bestsellers", "⭐"], ["Customer Service", "/customer-service", "💬"], ["Gift Cards", "/gift-cards", "🎁"], ["Sell on SokoJamo", "/sell", "🛍️"], ["Wishlist", "/wishlist", "♡"] ] as [string, string, string][]).map(([label, href, icon]) => (
+        {/* Navigation */}
+        <div className="flex-1 overflow-y-auto">
+          <nav className="px-5 py-3">
+            {[
+              ["Home", "/"],
+              ["Today's Deals", "/deals"],
+              ["Best Sellers", "/bestsellers"],
+              ["Wishlist", "/wishlist"],
+              ["Sell on SokoJamo", "/sell"],
+              ["Customer Service", "/customer-service"],
+            ].map(([label, href]) => (
               <Link
                 key={href}
                 href={href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center gap-3 py-3 text-sm font-medium text-gray-800 hover:text-blue-600 border-b border-gray-50 last:border-0 transition-colors"
+                className="flex items-center justify-between py-3.5 text-sm font-medium text-gray-800 border-b border-gray-100 hover:text-blue-600 transition-colors"
               >
-                <span className="text-base w-5 text-center" aria-hidden>{icon}</span>
                 {label}
+
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  className="w-4 h-4 text-gray-400"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 18l6-6-6-6"
+                  />
+                </svg>
               </Link>
             ))}
-          </div>
+          </nav>
 
           {/* Categories */}
-          <div className="px-5 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Categories</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(['Electronics', 'Fashion & Apparel', 'Home & Garden', 'Sports & Outdoors', 'Health & Beauty', 'Toys & Games', 'Automotive', 'Books & Media']).map((dept) => (
+          <div className="px-5 pt-4 pb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
+              Categories
+            </p>
+
+            <div className="space-y-1">
+              {[
+                "Electronics",
+                "Fashion & Apparel",
+                "Home & Garden",
+                "Sports & Outdoors",
+                "Health & Beauty",
+                "Toys & Games",
+                "Automotive",
+                "Books & Media",
+              ].map((dept) => (
                 <button
                   key={dept}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center justify-center px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-all duration-150 text-center"
+                  className="w-full flex items-center justify-between py-3 text-sm text-gray-700 border-b border-gray-50 hover:text-blue-600 transition-colors text-left"
                 >
                   {dept}
+
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    className="w-4 h-4 text-gray-400"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 18l6-6-6-6"
+                    />
+                  </svg>
                 </button>
               ))}
             </div>

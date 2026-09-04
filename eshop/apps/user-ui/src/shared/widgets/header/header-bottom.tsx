@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import React, { useState, useRef, useEffect } from 'react';
 import { navItems } from '../../../configs/constants';
+import ProfileIcon from '../../../assets/svgs/profile-icon';
+import HeartIcon from '../../../assets/svgs/heart-icon';
+import CartIcon from '../../../assets/svgs/cart-icon';
 import useUser from 'apps/user-ui/src/hooks/useUser';
+import { useStore } from 'apps/user-ui/src/store';
 
 
 const departments = [
@@ -21,8 +25,10 @@ const HeaderBottom = () => {
   const [showDepts, setShowDepts] = useState(false);
   const [activeLink, setActiveLink] = useState('/');
   const [isSticky, setIsSticky] = useState(false);
+  const wishlist = useStore((state: any) => state.wishlist);
+  const cart = useStore((state: any) => state.cart);
   const deptsRef = useRef<HTMLDivElement>(null);
-  const { user } = useUser();
+  const { user, isloading } = useUser();
 
 
 
@@ -54,9 +60,8 @@ const HeaderBottom = () => {
       {isSticky && <div className="h-[44px] hidden md:block" />}
 
       <div
-        className={`w-full bg-white z-40 transition-shadow duration-200 hidden md:block ${
-          isSticky ? 'fixed top-0 left-0 right-0 shadow-md' : 'relative'
-        }`}
+        className={`w-full bg-white z-40 transition-shadow duration-200 hidden md:block ${isSticky ? 'fixed top-0 left-0 right-0 shadow-md' : 'relative'
+          }`}
       >
         <div className="flex items-center border-t border-slate-100">
 
@@ -102,29 +107,71 @@ const HeaderBottom = () => {
                 key={item.href}
                 href={item.href}
                 onClick={() => setActiveLink(item.href)}
-                className={`px-4 py-3 text-sm font-medium transition-colors duration-150 border-b-2 ${
-                  activeLink === item.href
+                className={`px-4 py-3 text-sm font-medium transition-colors duration-150 border-b-2 ${activeLink === item.href
                     ? 'text-blue-600 border-blue-600'
                     : 'text-gray-700 border-transparent hover:text-blue-600'
-                }`}
+                  }`}
               >
                 {item.title}
               </Link>
             ))}
           </nav>
 
-          {/* Become a Seller link from constants */}
-          {sellerLink && (
-            <Link
-              href={sellerLink.href}
-              className="ml-auto mr-4 flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors py-3"
-            >
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" d="M12 5v14M5 12h14" />
-              </svg>
-              {sellerLink.title}
-            </Link>
-          )}
+          {/* Right-hand cluster: sticky-only icons + seller link */}
+          <div className="ml-auto flex items-center gap-1">
+
+            {/* Only shown once the top header has scrolled out of view */}
+            {isSticky && (
+              <div className="flex items-center gap-1 pr-3 mr-3 border-r border-gray-200">
+
+                {/* Wishlist */}
+                <Link href="/wishlist" className="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 group">
+                  <HeartIcon className="w-5 h-5 text-gray-600 group-hover:text-red-500 transition-colors duration-200" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{wishlist?.length}</span>
+                </Link>
+
+                {/* Cart */}
+                <Link href="/cart" className="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 group">
+                  <CartIcon className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors duration-200" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{cart?.length}</span>
+                </Link>
+
+                {/* Profile */}
+                {!isloading && user ? (
+                  <Link href="/profile" className="flex items-center gap-2 group pl-1" aria-label="Go to profile">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 group-hover:bg-blue-50 group-hover:text-blue-700 text-gray-600 transition-all duration-200">
+                      <ProfileIcon className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {user?.name?.split(" ")[0]}
+                    </span>
+                  </Link>
+                ) : (
+                  <Link href="/login" className="flex items-center gap-2 group pl-1" aria-label="Sign in">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 group-hover:bg-blue-50 group-hover:text-blue-700 text-gray-600 transition-all duration-200">
+                      <ProfileIcon className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {isloading ? '...' : 'Sign In'}
+                    </span>
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {/* Become a Seller link from constants */}
+            {sellerLink && (
+              <Link
+                href={sellerLink.href}
+                className="mr-4 flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors py-3"
+              >
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+                </svg>
+                {sellerLink.title}
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </>

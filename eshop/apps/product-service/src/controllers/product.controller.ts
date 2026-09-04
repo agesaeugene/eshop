@@ -1,6 +1,7 @@
 import { AuthError, NotFoundError, ValidationError } from "@packages/error-handler";
 import { imagekit } from "@packages/libs/imagekit";
 import prisma from '@packages/libs/prisma';
+import { Prisma } from "../../../../generated/prisma";
 import { NextFunction, Request, Response } from "express";
 // import { PrismaClient } from '@packages/prisma-client';
 
@@ -15,7 +16,7 @@ export const getCategories = async (
         const config = await prisma.site_config.findFirst();
 
         if (!config) {
-            return res.status(404).json({ message: "Categories not found"});
+            return res.status(404).json({ message: "Categories not found" });
         }
 
         return res.status(200).json({
@@ -66,14 +67,14 @@ export const createDiscountCodes = async (req: any, res: Response, next: NextFun
     } catch (error) {
         next(error);
     }
-}; 
+};
 
 
 // get discount codes
 export const getDiscountCodes = async (
     req: any,
     res: Response,
-    next: NextFunction, 
+    next: NextFunction,
 ) => {
     try {
         const discount_codes = await prisma.discount_codes.findMany({
@@ -99,7 +100,7 @@ export const deleteDiscountCode = async (
 
 ) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const sellerId = req.seller?.id;
 
         const discountCode = await prisma.discount_codes.findUnique({
@@ -115,18 +116,18 @@ export const deleteDiscountCode = async (
             return next(new ValidationError("Unauthorized access!"));
         }
 
-        await prisma.discount_codes.delete({ where: { id }});
+        await prisma.discount_codes.delete({ where: { id } });
 
         return res.status(200).json({ message: "Discount code successfully deleted" });
 
 
-    }  catch (error) {
+    } catch (error) {
         next(error)
-    } 
+    }
 }
 
 // upload product image
-export const uploadProductImage = async(req:Request, res:Response, next:NextFunction) =>{
+export const uploadProductImage = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { fileName } = req.body;
 
@@ -138,7 +139,7 @@ export const uploadProductImage = async(req:Request, res:Response, next:NextFunc
 
         res.status(201).json({
             file_url: response.url,
-            fileId: response.fileId,            
+            fileId: response.fileId,
         });
 
     } catch (error) {
@@ -148,20 +149,20 @@ export const uploadProductImage = async(req:Request, res:Response, next:NextFunc
 
 // delete product image
 
-export const deleteProductImage = async(req:Request, res:Response, next: NextFunction) => {
-try {
-    const { fileId } = req.body;
+export const deleteProductImage = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { fileId } = req.body;
 
-    const response = await imagekit.deleteFile(fileId);
+        const response = await imagekit.deleteFile(fileId);
 
-    res.status(201).json({
-        success: true,
-        response,
-    });
+        res.status(201).json({
+            success: true,
+            response,
+        });
 
-} catch (error) {
-    next(error);
-}
+    } catch (error) {
+        next(error);
+    }
 }
 
 // create product
@@ -248,11 +249,11 @@ export const createProduct = async (
                 custom_properties: customProperties || {},
                 custom_specifications: custom_specifications || {},
                 images: {
-                    create: images.filter((img:any) => img && img.fileId && img.file_url)
-                    .map((image: any) => ({
-                        file_id: image.fileId,
-                        url: image.file_url,
-                    })),
+                    create: images.filter((img: any) => img && img.fileId && img.file_url)
+                        .map((image: any) => ({
+                            file_id: image.fileId,
+                            url: image.file_url,
+                        })),
                 },
             },
             include: { images: true },
@@ -297,18 +298,18 @@ export const deleteProduct = async (
     req: any,
     res: Response,
     next: NextFunction
-) =>{
+) => {
     try {
         const { productId } = req.params;
         const sellerId = req.seller?.shop?.id;
 
         const product = await prisma.products.findUnique({
             where: { id: productId },
-            select: {id: true, shopId: true, isDeleted: true },
+            select: { id: true, shopId: true, isDeleted: true },
         });
 
         if (!product) {
-            return next( new ValidationError("Product not found"));
+            return next(new ValidationError("Product not found"));
         }
 
         if (product.shopId !== sellerId) {
@@ -329,7 +330,7 @@ export const deleteProduct = async (
 
         return res.status(200).json({
             message:
-            "Product is scheduled for deletion in 24 hours. You can restoore within this time",
+                "Product is scheduled for deletion in 24 hours. You can restoore within this time",
             deletedAt: deletedProduct.deletedAt,
         });
     } catch (error) {
@@ -374,5 +375,74 @@ export const restoreProduct = async (
         return res.status(200).json({ message: "Product successfully restored!" });
     } catch (error) {
         return res.status(500).json({ message: "Error restoring product", error });
+    }
+};
+
+//get seller stripe information
+
+//get get layout
+export const getLayout = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const config = await prisma.site_config.findFirst();
+        if (!config) {
+            return res.status(404).json({ message: "Layout not found" });
+        }
+        return res.status(200).json({ layout: config });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+
+//get all products
+export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const skip = (page - 1) * limit;
+        const type = req.query.type as string;
+
+        const baseFilter = {
+            isDeleted: false,
+        };
+
+        const orderBy: Prisma.productsOrderByWithRelationInput =
+            type === "latest"
+                ? { createdAt: "desc" as Prisma.SortOrder }
+                : { totalSales: "desc" };
+
+        const [products, total, top10Products] = await Promise.all([
+            prisma.products.findMany({
+                skip,
+                take: limit,
+                include: {
+                    images: true,
+                    shop: true,
+                },
+                where: baseFilter,
+                orderBy,
+            }),
+            prisma.products.count({ where: baseFilter }),
+            prisma.products.findMany({
+                take: 10,
+                where: baseFilter,
+                orderBy,
+                include: {
+                    images: true,
+                    shop: true,
+                },
+            }),
+        ]);
+
+        res.status(200).json({
+            products,
+            top10By: type === "latest" ? "latest" : "topSales",
+            top10Products,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+        });
+    } catch (error) {
+        next(error);
     }
 };
