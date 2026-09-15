@@ -6,28 +6,38 @@ const LOCATION_STORAGE_KEY = "user_location";
 const LOCATION_EXPIRY_DAYS = 20;
 
 const getStoredLocation = () => {
-    const storedData = localStorage.getItem(LOCATION_STORAGE_KEY);
+    if (typeof window === "undefined") return null;
 
+    const storedData = localStorage.getItem(LOCATION_STORAGE_KEY);
     if (!storedData) return null;
 
-    const parsedData = JSON.parse(storedData);
-    const expiryTime = LOCATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000; // 20 days
-    const isExpired = Date.now() - parsedData.timestamp > expiryTime;
-
-    return isExpired ? null : parsedData;
+    try {
+        const parsedData = JSON.parse(storedData);
+        const expiryTime = LOCATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+        const isExpired = Date.now() - parsedData.timestamp > expiryTime;
+        return isExpired ? null : parsedData;
+    } catch {
+        return null;
+    }
 };
 
 const useLocationTracking = () => {
-    const [location, setLocation] = useState<{ country: string; city: string } | null>(
-        getStoredLocation()
-    );
+    const [location, setLocation] = useState<{ country: string; city: string } | null>(null);
 
     useEffect(() => {
-        if (location) return;
+        const stored = getStoredLocation();
+        if (stored) {
+            setLocation(stored);
+            return;
+        }
 
-        fetch("http://ip-api.com/json/")
+        // HTTPS-compatible free geolocation endpoint (ip-api.com's free tier is HTTP-only,
+        // which browsers block as mixed content on an HTTPS site)
+        fetch("https://ipwho.is/")
             .then((res) => res.json())
             .then((data) => {
+                if (data?.success === false) return;
+
                 const newLocation = {
                     country: data?.country,
                     city: data?.city,
@@ -38,7 +48,7 @@ const useLocationTracking = () => {
                 setLocation(newLocation);
             })
             .catch((error) => console.log("Failed to get location", error));
-    }, [location]);
+    }, []);
 
     return location;
 };

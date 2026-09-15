@@ -16,6 +16,9 @@ const ProductCard = ({ product, isEvent }: { product: any; isEvent?: boolean }) 
     const location = useLocationTracking();
     const deviceInfo = useDeviceTracking();
     const addToCart = useStore((state: any) => state.addToCart);
+    const removeFromCart = useStore((state: any) => state.removeFromCart);
+    const cart = useStore((state: any) => state.cart);
+    const isInCart = cart.some((item: any) => item.id === product.id);
     const addToWishlist = useStore((state: any) => state.addToWishlist);
     const removeFromWishlist = useStore((state: any) => state.removeFromWishlist);
     const wishlist = useStore((state: any) => state.wishlist);
@@ -127,10 +130,26 @@ const ProductCard = ({ product, isEvent }: { product: any; isEvent?: boolean }) 
                         onClick={() => setOpen(!open)}
                     />
                 </div>
-                <div className="bg-white rounded-full p-[6px] shadow-md">
+                <div
+                    className={`bg-white rounded-full p-[6px] shadow-md transition-all duration-200 ${isInCart ? "ring-2 ring-blue-500" : ""
+                        }`}
+                >
                     <ShoppingBag
                         size={22}
-                        className="cursor-pointer text-[#4b5563] hover:scale-110 transition"
+                        className="cursor-pointer hover:scale-110 transition-transform"
+                        stroke={isInCart ? "#2563eb" : "#4b5563"}
+                        strokeWidth={2}
+                        fill="none"
+                        onClick={() =>
+                            isInCart
+                                ? removeFromCart(product.id, user, location, deviceInfo)
+                                : addToCart(
+                                    { ...product, quantity: 1 },
+                                    user,
+                                    location,
+                                    deviceInfo
+                                )
+                        }
                     />
                 </div>
             </div>

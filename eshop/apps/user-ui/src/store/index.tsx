@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { sendKafkaEvent } from "../actions/track-user";
 
 type Product = {
     id: string;
@@ -16,29 +17,29 @@ type Store = {
     addToCart: (
         product: Product,
         user: any,
-        location: string,
-        deviceInfo: string,
+        location: any,
+        deviceInfo: any,
     ) => void;
 
     removeFromCart: (
         id: string,
         user: any,
-        location: string,
-        deviceInfo: string,
+        location: any,
+        deviceInfo: any,
     ) => void;
 
     addToWishlist: (
         product: Product,
         user: any,
-        location: string,
-        deviceInfo: string,
+        location: any,
+        deviceInfo: any,
     ) => void;
 
     removeFromWishlist: (
         id: string,
         user: any,
-        location: string,
-        deviceInfo: string,
+        location: any,
+        deviceInfo: any,
     ) => void;
 };
 
@@ -61,17 +62,40 @@ export const useStore = create<Store>()(
                             ),
                         };
                     }
-                    return { cart: [...state.cart, { ...product, quantity: 1 }] };
+                    return { cart: [...state.cart, { ...product, quantity: product?.quantity }] };
                 });
+
+                if (user?.id && location && deviceInfo) {
+                    sendKafkaEvent({
+                        userId: user?.id,
+                        productId: product?.id,
+                        shopId: product?.shopId,
+                        action: "add_to_cart",
+                        country: location?.country || "unknown",
+                        city: location?.city || "Unknown",
+                        device: deviceInfo || "Unknown Device",
+                    });
+                }
             },
 
             // remove from cart
             removeFromCart: (id, user, location, deviceInfo) => {
-                // find the product before calling set (e.g. for analytics/logging)
                 const removedProduct = get().cart.find((item) => item.id === id);
                 set((state) => ({
                     cart: state.cart.filter((item) => item.id !== id),
                 }));
+
+                if (user?.id && location && deviceInfo && removedProduct) {
+                    sendKafkaEvent({
+                        userId: user?.id,
+                        productId: removedProduct?.id,
+                        shopId: removedProduct?.shopId,
+                        action: "remove_from_cart",
+                        country: location?.country || "unknown",
+                        city: location?.city || "Unknown",
+                        device: deviceInfo || "Unknown Device",
+                    });
+                }
             },
 
             // add to wishlist
@@ -82,6 +106,18 @@ export const useStore = create<Store>()(
                     }
                     return { wishlist: [...state.wishlist, product] };
                 });
+
+                if (user?.id && location && deviceInfo) {
+                    sendKafkaEvent({
+                        userId: user?.id,
+                        productId: product?.id,
+                        shopId: product?.shopId,
+                        action: "add_to_wishlist",
+                        country: location?.country || "unknown",
+                        city: location?.city || "Unknown",
+                        device: deviceInfo || "Unknown Device",
+                    });
+                }
             },
 
             // remove from wishlist
@@ -90,6 +126,18 @@ export const useStore = create<Store>()(
                 set((state) => ({
                     wishlist: state.wishlist.filter((item) => item.id !== id),
                 }));
+
+                if (user?.id && location && deviceInfo && removedProduct) {
+                    sendKafkaEvent({
+                        userId: user?.id,
+                        productId: removedProduct?.id,
+                        shopId: removedProduct?.shopId,
+                        action: "remove_from_wishlist",
+                        country: location?.country || "unknown",
+                        city: location?.city || "Unknown",
+                        device: deviceInfo || "Unknown Device",
+                    });
+                }
             },
         }),
         { name: "store-storage" }

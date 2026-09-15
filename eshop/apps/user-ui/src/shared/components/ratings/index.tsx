@@ -1,3 +1,6 @@
+// import HalfStar from "apps/user-ui/src/assets/svg/HalfStar";
+// import StarFilled from "apps/user-ui/src/assets/svg/StarFilled";
+// import StarOutline from "apps/user-ui/src/assets/svg/StarOutline";
 import HalfStar from "apps/user-ui/src/assets/svgs/HalfStar";
 import StarFilled from "apps/user-ui/src/assets/svgs/StarFilled";
 import StarOutline from "apps/user-ui/src/assets/svgs/StarOutline";

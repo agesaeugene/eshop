@@ -30,7 +30,9 @@
     },
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "strict": false,
+    "isolatedModules": true
   },
   "include": [
     "../../apps/user-ui/.next/types/**/*.ts",

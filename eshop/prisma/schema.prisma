@@ -33,7 +33,8 @@ model users {
   password  String?
   following String[]
   avatar    images?                
-  reviews   shopReviews[]          
+  reviews   shopReviews[]
+  orders    orders[]            
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 }
@@ -65,7 +66,9 @@ model shops {
   reviews       shopReviews[]
   sellerId      String        @unique @db.ObjectId
   seller        sellers       @relation(fields: [sellerId], references: [id])
-  products      products[]  
+  products      products[]
+  followers     String[]      @db.ObjectId
+  orders        orders[]   
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -142,4 +145,39 @@ model products {
 
 
   shop shops @relation(fields: [shopId], references: [id])
+}
+
+model orders {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String      @db.ObjectId
+  user      users       @relation(fields: [userId], references: [id])
+  shopId    String      @db.ObjectId
+  shop      shops       @relation(fields: [shopId], references: [id])
+  total     Float
+  status    String      @default("Pending")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model userAnalytics {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
+  lastVisited  DateTime @default(now())
+  actions      Json[]
+  country      String?
+  city         String?
+  device       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model productAnalytics {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId     String   @unique @db.ObjectId
+  shopId        String?  @db.ObjectId
+  views         Int      @default(0)
+  cartAdds      Int      @default(0)
+  wishListAdds  Int      @default(0)
+  purchases     Int      @default(0)
+  lastViewedAt  DateTime @default(now())
 }

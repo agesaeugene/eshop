@@ -2,15 +2,13 @@
   "name": "@eshop/source",
   "version": "0.0.0",
   "license": "MIT",
-    "scripts": {
+  "scripts": {
     "dev": "npx nx run-many --target=serve --all",
     "auth-docs": "node apps/auth-service/src/swagger.js",
     "product-docs": "node apps/product-service/src/swagger.js",
     "user-ui": "npx nx run-many --target=dev --projects=user-ui",
     "seller-ui": "npx nx run-many --target=dev --projects=seller-ui"
   },
-
-      
   "private": true,
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.893.0",
@@ -31,6 +29,7 @@
     "ioredis": "^5.9.2",
     "jotai": "^2.20.1",
     "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
     "lucide": "^0.577.0",
     "lucide-react": "^0.577.0",
     "morgan": "^1.10.1",
@@ -41,6 +40,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.72.0",
     "react-hot-toast": "^2.6.0",
+    "react-image-magnify": "^2.7.4",
     "react-quill-new": "^3.8.3",
     "styled-components": "^6.4.3",
     "swagger-autogen": "^2.23.7",
