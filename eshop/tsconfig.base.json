@@ -20,6 +20,8 @@
     "paths": {
       "@packages/utils/kafka": ["packages/utils/kafka/index.ts"],
       "@packages/libs/prisma": ["packages/libs/prisma/index.ts"],
+      "@packages/utils/categories": ["packages/utils/categories.tsx"],
+      "@packages/utils/countries": ["packages/utils/countries.tsx"],
       "@packages/*": ["packages/*"]
     }
   },

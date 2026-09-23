@@ -4,7 +4,7 @@ import {
     refreshToken as refreshTokenHelper,
 } from '../utils/auth.helper';
 import prisma from '@packages/libs/prisma';
-import { AuthError, ValidationError } from '@packages/error-handler';
+import { AuthError, NotFoundError, ValidationError } from '@packages/error-handler';
 import bcrypt from 'bcryptjs';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 import { setCookie } from '../utils/cookies/setCookie';
@@ -599,5 +599,274 @@ export const getSeller = async (
         });
     } catch (error) {
         next(error)
+    }
+};
+
+// add new address
+export const addUserAddress = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    const userId = req.user?.id;
+    const { label, name, street, city, zip, country, isDefault } = req.body;
+
+    try {
+        if (!label || !name || !street || !city || !zip || !country) {
+        return next(new ValidationError("All fields are required"));
+    }
+    if (isDefault) {
+        await prisma.address.updateMany({
+            where: {
+                userId,
+                isDefault: true,
+            },
+            data: {
+                isDefault: false,
+            },
+        });
+    }
+    const newAddress = await prisma.address.create({
+        data: {
+            userId,
+            label,
+            name,
+            Street: street,  
+            city,
+            zip,
+            country,
+            isDefault,
+        },
+    });
+
+    res.status(201).json({
+        success: true,
+        address: newAddress,
+    });
+    } catch (error) {
+        return next(error);
+    }
+
+};
+
+// delete user address
+export const deleteUserAddress = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+        const { addressId } = req.params
+
+        if(!addressId) {
+            return next(new ValidationError("Address ID is required"));
+        }
+
+        const existingAddress = await prisma.address.findFirst({
+            where: {
+                id: addressId,
+                userId,
+            },
+        });
+
+        if (!existingAddress) {
+            return next(new NotFoundError("address not found or unauthorized"));
+        }
+
+        await prisma.address.delete({
+            where: { id: addressId },
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Address deleted successfully",
+        });
+
+    } catch (error) {
+        return next(error);
+    }
+}
+
+// get user addresses
+export const getUserAddresses = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+
+        const addresses = await prisma.address.findMany({
+            where: {
+                userId,
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+        });
+
+
+        res.status(200).json({
+            success: true,
+            addresses,
+        })
+    } catch(error) {
+        next(error);
+
+    }
+}
+
+// Change password (authenticated user, not the forgot-password OTP flow)
+export const changeUserPassword = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            return next(new ValidationError("All fields are required!"));
+        }
+
+        if (newPassword !== confirmPassword) {
+            return next(new ValidationError("New password and confirm password do not match!"));
+        }
+
+        if (newPassword.length < 8) {
+            return next(new ValidationError("New password must be at least 8 characters!"));
+        }
+
+        const user = await prisma.users.findUnique({ where: { id: userId } });
+        if (!user || !user.password) {
+            return next(new AuthError("User not found!"));
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return next(new AuthError("Current password is incorrect!"));
+        }
+
+        const isSamePassword = await bcrypt.compare(newPassword, user.password);
+        if (isSamePassword) {
+            return next(new ValidationError("New password cannot be the same as the current password!"));
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await prisma.users.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Password changed successfully!",
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Get the logged-in user's orders
+export const getUserOrders = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+
+        const orders = await prisma.orders.findMany({
+            where: { userId },
+            include: {
+                items: true,
+                shop: {
+                    select: { id: true, name: true },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.status(200).json({
+            success: true,
+            orders,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Get the logged-in user's notifications
+export const getUserNotifications = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+
+        const notifications = await prisma.notifications.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.status(200).json({
+            success: true,
+            notifications,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Mark a single notification as read
+export const markNotificationRead = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+        const { id } = req.params;
+
+        const notification = await prisma.notifications.findFirst({
+            where: { id, userId },
+        });
+
+        if (!notification) {
+            return next(new NotFoundError("Notification not found"));
+        }
+
+        await prisma.notifications.update({
+            where: { id },
+            data: { isRead: true },
+        });
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Mark all notifications as read
+export const markAllNotificationsRead = async (
+    req: any,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const userId = req.user?.id;
+
+        await prisma.notifications.updateMany({
+            where: { userId, isRead: false },
+            data: { isRead: true },
+        });
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        next(error);
     }
 };

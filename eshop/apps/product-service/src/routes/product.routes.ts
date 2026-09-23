@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import { createDiscountCodes, createProduct, deleteDiscountCode, deleteProduct, deleteProductImage, getAllProducts, getCategories, getDiscountCodes, getFilteredEvents, getFilteredProducts, getFilteredShops, getLayout, 
+import { createDiscountCodes, createProduct, deleteDiscountCode, deleteProduct, deleteProductImage, getAllEvents, getAllProducts, getCategories, getDiscountCodes, getFilteredEvents, getFilteredProducts, getFilteredShops, getLayout, 
     getProductDetails, getShopProducts, restoreProduct, searchProducts, topShops, uploadProductImage } from "../controllers/product.controller";
 import isAuthenticated from "@packages/middleware/isAuthenticated";
 import { isSeller } from "@packages/middleware/authorizeRole";
@@ -23,7 +23,7 @@ router.get("/get-filtered-offers", getFilteredEvents);
 router.get("/get-filtered-shops", getFilteredShops);
 router.get("/search-products", searchProducts);
 router.get("/top-shops", topShops);
-
+router.get("/get-all-events", getAllEvents);
 router.get("/get-layout", getLayout);
 
 export default router;

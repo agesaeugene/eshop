@@ -11,6 +11,15 @@ import ProductCard from "apps/user-ui/src/shared/components/cards/product-card";
 const MIN = 0;
 const MAX = 1199;
 
+const DISCOUNT_TIERS = [10, 20, 30, 50];
+
+const SORT_OPTIONS = [
+  { label: "Best Discount", value: "discount_desc" },
+  { label: "Newest", value: "newest" },
+  { label: "Price: Low to High", value: "price_asc" },
+  { label: "Price: High to Low", value: "price_desc" },
+];
+
 const Page = () => {
   const router = useRouter();
 
@@ -19,6 +28,8 @@ const Page = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [minDiscount, setMinDiscount] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<string>("discount_desc");
   const [page, setPage] = useState(1);
   const [products, setProducts] = useState<any[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -44,8 +55,10 @@ const Page = () => {
     if (selectedColors.length > 0)
       params.set("colors", selectedColors.join(","));
     if (selectedSizes.length > 0) params.set("sizes", selectedSizes.join(","));
+    if (minDiscount !== null) params.set("minDiscount", minDiscount.toString());
+    params.set("sortBy", sortBy);
     params.set("page", page.toString());
-    router.replace(`/products?${decodeURIComponent(params.toString())}`);
+    router.replace(`/offers?${decodeURIComponent(params.toString())}`);
   };
 
   const fetchFilteredProducts = async () => {
@@ -62,18 +75,21 @@ const Page = () => {
         query.set("colors", selectedColors.join(","));
       if (selectedSizes.length > 0)
         query.set("sizes", selectedSizes.join(","));
+      if (minDiscount !== null)
+        query.set("minDiscount", minDiscount.toString());
 
+      query.set("sortBy", sortBy);
       query.set("page", page.toString());
       query.set("limit", "12");
 
       const res = await axiosInstance.get(
-        `/product/api/get-filtered-products?${query.toString()}`
+        `/product/api/get-filtered-offers?${query.toString()}`
       );
 
       setProducts(res.data.products);
       setTotalPages(res.data.pagination.totalPages);
     } catch (error) {
-      console.error("Failed to fetch filtered products", error);
+      console.error("Failed to fetch filtered offers", error);
     } finally {
       setIsProductLoading(false);
     }
@@ -82,7 +98,15 @@ const Page = () => {
   useEffect(() => {
     updateURL();
     fetchFilteredProducts();
-  }, [priceRange, selectedCategories, selectedColors, selectedSizes, page]);
+  }, [
+    priceRange,
+    selectedCategories,
+    selectedColors,
+    selectedSizes,
+    minDiscount,
+    sortBy,
+    page,
+  ]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["categories"],
@@ -113,18 +137,23 @@ const Page = () => {
     );
   };
 
+  const toggleDiscount = (tier: number) => {
+    setMinDiscount((prev) => (prev === tier ? null : tier));
+    setPage(1);
+  };
+
   return (
     <div className="w-full bg-[#f5f5f5] pb-10">
       <div className="w-[90%] lg:w-[80%] m-auto">
         <div className="pb-[50px]">
           <h1 className="md:pt-[140px] font-medium text-[44px] leading-1 mb-[14px] font-jost">
-            All Products
+            All Offers
           </h1>
           <Link href="/" className="text-[#55585b] hover:underline">
             Home
           </Link>
           <span className="inline-block p-[1.5px] mx-1 bg-[#a8acb0] rounded-full"></span>
-          <span className="text-[#55585b]">All Products</span>
+          <span className="text-[#55585b]">All Offers</span>
         </div>
 
         <div className="w-full flex flex-col lg:flex-row gap-8">
@@ -189,8 +218,28 @@ const Page = () => {
               </button>
             </div>
 
+            {/* Discount */}
+            <h3 className="text-xl font-poppins font-medium border-b border-b-slate-300 pb-1 mt-6">
+              Discount
+            </h3>
+            <ul className="space-y-2 !mt-3">
+              {DISCOUNT_TIERS.map((tier) => (
+                <li key={tier} className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={minDiscount === tier}
+                      onChange={() => toggleDiscount(tier)}
+                      className="accent-blue-600"
+                    />
+                    <span className="font-medium">{tier}% & above</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+
             {/* Categories */}
-            <h3 className="text-xl font-poppins font-medium border-b border-b-slate-300 pb-1">
+            <h3 className="text-xl font-poppins font-medium border-b border-b-slate-300 pb-1 mt-6">
               Categories
             </h3>
             <ul className="space-y-2 !mt-3">
@@ -266,6 +315,27 @@ const Page = () => {
 
           {/* Product grid */}
           <div className="flex-1 px-2 lg:px-3">
+            {/* Sort bar */}
+            <div className="flex justify-between items-center mb-4 bg-white p-3 !rounded shadow-md">
+              <span className="text-sm text-gray-600">
+                {products.length > 0 && `Showing offers on page ${page}`}
+              </span>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
+                className="text-sm border border-gray-200 !rounded px-3 py-1.5 bg-white cursor-pointer"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {isProductLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
                 {Array.from({ length: 12 }).map((_, index) => (
@@ -282,7 +352,7 @@ const Page = () => {
                 ))}
               </div>
             ) : (
-              <p>No Products found!</p>
+              <p>No Offers found!</p>
             )}
 
             {totalPages > 1 && (

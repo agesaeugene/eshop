@@ -2,6 +2,7 @@ import Header from '../shared/widgets/header/header';
 import './global.css';
 import {Poppins, Roboto} from "next/font/google";
 import Providers from './providers';
+import Footer from '../shared/widgets/footer/footer';
  
 
 export const metadata = {
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
         <Header />
         {children}
+        <Footer />
         </Providers>
+        
       </body>
     </html>
   )

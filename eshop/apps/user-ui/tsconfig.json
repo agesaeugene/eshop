@@ -24,10 +24,19 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    },
+  "@/*": [
+    "./src/*"
+  ],
+  "@packages/utils/categories": [
+    "../../packages/utils/categories.tsx"
+  ],
+  "@packages/utils/countries": [
+    "../../packages/utils/countries.tsx"
+  ],
+  "@packages/*": [
+    "../../packages/*"
+  ]
+},
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",

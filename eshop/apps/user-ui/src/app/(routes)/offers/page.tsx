@@ -45,7 +45,7 @@ const Page = () => {
       params.set("colors", selectedColors.join(","));
     if (selectedSizes.length > 0) params.set("sizes", selectedSizes.join(","));
     params.set("page", page.toString());
-    router.replace(`/products?${decodeURIComponent(params.toString())}`);
+    router.replace(`/offers?${decodeURIComponent(params.toString())}`);
   };
 
   const fetchFilteredProducts = async () => {
@@ -67,7 +67,7 @@ const Page = () => {
       query.set("limit", "12");
 
       const res = await axiosInstance.get(
-        `/product/api/get-filtered-products?${query.toString()}`
+        `/product/api/get-filtered-offers?${query.toString()}`
       );
 
       setProducts(res.data.products);
@@ -118,13 +118,13 @@ const Page = () => {
       <div className="w-[90%] lg:w-[80%] m-auto">
         <div className="pb-[50px]">
           <h1 className="md:pt-[140px] font-medium text-[44px] leading-1 mb-[14px] font-jost">
-            All Products
+            All Offers
           </h1>
           <Link href="/" className="text-[#55585b] hover:underline">
             Home
           </Link>
           <span className="inline-block p-[1.5px] mx-1 bg-[#a8acb0] rounded-full"></span>
-          <span className="text-[#55585b]">All Products</span>
+          <span className="text-[#55585b]">All Offers</span>
         </div>
 
         <div className="w-full flex flex-col lg:flex-row gap-8">

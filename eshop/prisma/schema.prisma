@@ -148,15 +148,54 @@ model products {
 }
 
 model orders {
+  id              String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String       @db.ObjectId
+  user            users        @relation(fields: [userId], references: [id])
+  shopId          String       @db.ObjectId
+  shop            shops        @relation(fields: [shopId], references: [id])
+  total           Float
+  shippingAddressId String?
+  couponCode      String?
+  discountAmount  Float?
+  status          String       @default("Pending")
+  deliveryStatus  String       @default("ordered")
+
+  items           orderItems[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model orderItems {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId         String   @db.ObjectId
+  productId       String   @db.ObjectId
+  quantity        Int
+  price           Float
+  selectedOptions Json?
+
+  orders          orders   @relation(fields: [orderId], references: [id])
+
+  createdAt       DateTime @default(now())
+}
+
+enum addressType {
+  Home
+  Work
+  Other
+}
+
+model address {
   id        String      @id @default(auto()) @map("_id") @db.ObjectId
   userId    String      @db.ObjectId
-  user      users       @relation(fields: [userId], references: [id])
-  shopId    String      @db.ObjectId
-  shop      shops       @relation(fields: [shopId], references: [id])
-  total     Float
-  status    String      @default("Pending")
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  label     addressType
+  name      String
+  Street    String
+  city      String
+  zip       String
+  country   String
+  isDefault Boolean   @default(true)
+  createdAt DateTime  @default(now())
 }
 
 model userAnalytics {
@@ -180,4 +219,36 @@ model productAnalytics {
   wishListAdds  Int      @default(0)
   purchases     Int      @default(0)
   lastViewedAt  DateTime @default(now())
+}
+
+model shopAnalytics {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  totalVisitors Int    @default(0)
+
+  countryStats  Json? // Store aggregated country data { "US" 20, "IN" 50, "UK" 50}
+  cityStats     Json? // Store aggregated city data {"New York": 10, "Delhi": 25}
+  deviceStats   Json? // Store aggregated device data {"Mobile": 50, "Desktop": 30}
+
+  lastViewedAt DateTime
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model uniqueShopVisitors {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  shopId    String      @db.ObjectId
+  userId    String      @db.ObjectId
+
+  @@unique([shopId, userId])
+}
+
+model notifications {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  title         String
+  message       String
+  isRead        Boolean  @default(false)
+  redirect_link String?
+  createdAt     DateTime @default(now())
 }
