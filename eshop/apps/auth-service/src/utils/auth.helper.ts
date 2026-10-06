@@ -45,6 +45,40 @@ export const checkOtpRestrictions = async (
     return false;
 };
 
+export const validateRegistrationData = (data: any, userType: "user" | "seller") => {
+    const { name, email, password, phone_number, country } = data;
+
+    if (
+        !name || !email || !password || (userType === "seller" && (!phone_number || !country))
+    ) {
+        throw new ValidationError('Missing required fields!');
+    }
+
+    if (!emailRegex.test(email)) {
+        throw new ValidationError("Invalid email format!");
+    }
+};
+
+// export const checkOtpRestrictions = async (
+//     email: string,
+//     next: NextFunction,
+//     role: "user" | "seller" | "admin" = "user"
+// ): Promise<boolean> => {
+//     if (await redis.get(`otp_lock:${role}:${email}`)) {
+//         throw new ValidationError("Account locked due to multiple failed attempts! Try again after 30 minutes.");
+//         return true;
+//     }
+//     if (await redis.get(`otp_spam_lock:${role}:${email}`)) {
+//         return next(new ValidationError("Too many OTP requests! Please wait 1 hour and try again."));
+        
+//     }
+//     if (await redis.get(`otp_cooldown:${role}:${email}`)) {
+//         new ValidationError("Please wait a minute before requesting a new OTP again!");
+        
+//     }
+//     return false;
+// };
+
 export const trackOtpRequests = async (
     email: string,
     next: NextFunction,

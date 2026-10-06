@@ -80,6 +80,7 @@ model sellers {
   phone_number String
   country      String
   mpesa_number   String?
+  stripeId       String?
   phone_verified Boolean @default(false)
   password     String
   shop         shops?           
@@ -246,6 +247,7 @@ model uniqueShopVisitors {
 model notifications {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   userId        String   @db.ObjectId
+  receiverId    String
   title         String
   message       String
   isRead        Boolean  @default(false)

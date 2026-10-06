@@ -23,12 +23,18 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@packages/*": ["../../packages/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@packages/*": [
+        "../../packages/*"
+      ]
     },
     "outDir": "dist",
     "rootDir": "../../",
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "strict": false,
+    "isolatedModules": true
   },
   "include": [
     "next-env.d.ts",
