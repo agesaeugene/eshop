@@ -1,4 +1,5 @@
 import {useQuery} from '@tanstack/react-query';
+import { useEffect } from 'react';
 import axiosInstance from '../utils/axiosInstance';
 
 
@@ -15,6 +16,17 @@ const useSeller = () => {
         staleTime: 5 * 60 * 1000, //5 minutes
         retry: 1,
     });
+    useEffect(() => {
+        if (!seller?.id) return;
+        const heartbeat = () => {
+            void axiosInstance.post("/api/seller/session-heartbeat").catch((error) => {
+                console.error("Could not update seller activity status:", error);
+            });
+        };
+        heartbeat();
+        const interval = window.setInterval(heartbeat, 30_000);
+        return () => window.clearInterval(interval);
+    }, [seller?.id]);
 return {seller, isloading, isError, refetch};
 };
 

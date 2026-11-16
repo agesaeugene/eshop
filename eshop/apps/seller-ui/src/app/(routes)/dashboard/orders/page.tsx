@@ -20,7 +20,8 @@ const OrdersTable = () => {
     const {data: orders = [], isLoading } = useQuery({
         queryKey: ["seller-orders"],
         queryFn: fetchOrders,
-        staleTime: 1000 * 60 * 5,
+        staleTime: 1000 * 30,
+        refetchInterval: 1000 * 30,
     });
 
     const columns = useMemo(
@@ -30,7 +31,7 @@ const OrdersTable = () => {
                 header: "Order ID",
                 cell: ({ row }: any) => (
                     <span className="text-white text-sm truncate">
-                        #(row.original.id.slice(-6).toUpperCase())
+                        #{row.original.id.slice(-6).toUpperCase()}
                     </span>
                 ),
             },
@@ -46,7 +47,7 @@ const OrdersTable = () => {
             {
                 accessorKey: "total",
                 header: "Total",
-                cell: ({ row }: any) => <span>${row.original.total}</span>,
+                cell: ({ row }: any) => <span>KES {Number(row.original.total).toFixed(2)}</span>,
             },
             {
                 accessorKey: "status",
@@ -62,6 +63,17 @@ const OrdersTable = () => {
                         {row.original.status}
                     </span>
                 )
+            },
+            {
+                accessorKey: "deliveryStatus",
+                header: "Fulfillment",
+                cell: ({ row }: any) => (
+                    <span className="text-white">
+                        {row.original.deliveryStatus === "ordered"
+                            ? "Ready to ship"
+                            : row.original.deliveryStatus}
+                    </span>
+                ),
             },
             {
                 accessorKey: "createdAt",
@@ -164,4 +176,3 @@ const OrdersTable = () => {
 };
 
 export default OrdersTable;
-

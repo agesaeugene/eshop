@@ -16,8 +16,27 @@ import initializeSiteConfig from './libs/initializeSiteConfig';
 
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3003',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://localhost:3006',
+  'http://localhost:3007',
+  'http://localhost:3008',
+  'http://localhost:3009',
+];
+
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // allow non-browser clients (no Origin header) and whitelisted UIs
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   allowedHeaders: ['Authorization', 'Content-Type'],
   credentials: true,
 }));
@@ -43,7 +62,8 @@ app.use(limiter);
 app.get('/gateway-healh', (req, res) => {
   res.send({ message: 'Welcome to api-gateway!' });
 });
-
+app.use("/chatting", proxy("http://localhost:6006"));
+app.use("/admin", proxy("http://localhost:6005"));
 app.use("/order", proxy("http://localhost:6004"));
 app.use("/seller", proxy("http://localhost:6003"));
 app.use("/product", proxy("http://localhost:6002"));

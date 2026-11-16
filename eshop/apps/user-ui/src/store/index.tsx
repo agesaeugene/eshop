@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
+import toast from "react-hot-toast";
 import { sendKafkaEvent } from "../actions/track-user";
 
 type Product = {
@@ -14,33 +15,53 @@ type Product = {
 type Store = {
     cart: Product[];
     wishlist: Product[];
-    addToCart: (
-        product: Product,
-        user: any,
-        location: any,
-        deviceInfo: any,
-    ) => void;
+    addToCart: (product: Product, user: any, location: any, deviceInfo: any) => void;
+    removeFromCart: (id: string, user: any, location: any, deviceInfo: any) => void;
+    addToWishlist: (product: Product, user: any, location: any, deviceInfo: any) => void;
+    removeFromWishlist: (id: string, user: any, location: any, deviceInfo: any) => void;
+};
 
-    removeFromCart: (
-        id: string,
-        user: any,
-        location: any,
-        deviceInfo: any,
-    ) => void;
+// ---- per-user persistence -------------------------------------------------
+// null = nobody logged in: nothing is read from or written to localStorage.
+let activeUserId: string | null = null;
 
-    addToWishlist: (
-        product: Product,
-        user: any,
-        location: any,
-        deviceInfo: any,
-    ) => void;
+const userScopedStorage: StateStorage = {
+    getItem: (name) =>
+        activeUserId && typeof window !== "undefined"
+            ? window.localStorage.getItem(`${name}:${activeUserId}`)
+            : null,
+    setItem: (name, value) => {
+        if (activeUserId && typeof window !== "undefined") {
+            window.localStorage.setItem(`${name}:${activeUserId}`, value);
+        }
+    },
+    removeItem: (name) => {
+        if (activeUserId && typeof window !== "undefined") {
+            window.localStorage.removeItem(`${name}:${activeUserId}`);
+        }
+    },
+};
 
-    removeFromWishlist: (
-        id: string,
-        user: any,
-        location: any,
-        deviceInfo: any,
-    ) => void;
+/**
+ * Call whenever the logged-in user changes (login, logout, switching account).
+ * Clears the in-memory cart/wishlist, then loads that user's saved ones.
+ */
+export const setActiveStoreUser = (userId: string | null) => {
+    if (activeUserId === userId) return;
+
+    // 1. detach storage first so clearing doesn't overwrite anyone's saved data
+    activeUserId = null;
+    useStore.setState({ cart: [], wishlist: [] });
+
+    // 2. attach the new user's storage and load their saved cart/wishlist
+    activeUserId = userId;
+    if (userId) useStore.persist.rehydrate();
+};
+
+const requireLogin = (user: any, what: string) => {
+    if (user?.id) return true;
+    toast.error(`Please log in to add items to your ${what}.`);
+    return false;
 };
 
 export const useStore = create<Store>()(
@@ -51,6 +72,8 @@ export const useStore = create<Store>()(
 
             // add to cart
             addToCart: (product, user, location, deviceInfo) => {
+                if (!requireLogin(user, "cart")) return;
+
                 set((state) => {
                     const existing = state.cart.find((item) => item.id === product.id);
                     if (existing) {
@@ -100,6 +123,8 @@ export const useStore = create<Store>()(
 
             // add to wishlist
             addToWishlist: (product, user, location, deviceInfo) => {
+                if (!requireLogin(user, "wishlist")) return;
+
                 set((state) => {
                     if (state.wishlist.find((item) => item.id === product.id)) {
                         return state;
@@ -140,6 +165,9 @@ export const useStore = create<Store>()(
                 }
             },
         }),
-        { name: "store-storage" }
+        {
+            name: "store-storage",
+            storage: createJSONStorage(() => userScopedStorage),
+        }
     )
 );

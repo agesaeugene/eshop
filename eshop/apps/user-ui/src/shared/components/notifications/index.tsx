@@ -1,44 +1,39 @@
 'use client';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from 'apps/user-ui/src/utils/axiosInstance';
 import { Bell, CheckCheck } from 'lucide-react';
-
-type Notification = {
-    id: string;
-    title: string;
-    message: string;
-    isRead: boolean;
-    redirect_link?: string | null;
-    createdAt: string;
-};
+import { AppNotification } from 'apps/user-ui/src/types/order';
+import { USER_NOTIFICATIONS_KEY } from 'apps/user-ui/src/hooks/useUserNotifications';
 
 const NotificationsSection = ({
     notifications,
     isLoading,
 }: {
-    notifications: Notification[] | undefined;
+    notifications: AppNotification[] | undefined;
     isLoading: boolean;
 }) => {
+    const router = useRouter();
     const queryClient = useQueryClient();
+    const refresh = () => queryClient.invalidateQueries({ queryKey: USER_NOTIFICATIONS_KEY });
 
     const { mutate: markRead } = useMutation({
-        mutationFn: async (id: string) => {
-            await axiosInstance.put(`/api/notifications/${id}/read`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["user-notifications"] });
-        },
+        mutationFn: (id: string) => axiosInstance.put(`/order/api/notifications/${id}/read`),
+        onSuccess: refresh,
     });
 
     const { mutate: markAllRead, isPending: isMarkingAll } = useMutation({
-        mutationFn: async () => {
-            await axiosInstance.put(`/api/notifications/mark-all-read`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["user-notifications"] });
-        },
+        mutationFn: () => axiosInstance.put("/order/api/notifications/mark-all-read"),
+        onSuccess: refresh,
     });
+
+    const openNotification = (n: AppNotification) => {
+        if (!n.isRead) markRead(n.id);
+        if (!n.redirect_link) return;
+        if (n.redirect_link.startsWith("/")) router.push(n.redirect_link);
+        else window.location.href = n.redirect_link; // older absolute links
+    };
 
     if (isLoading) {
         return <p className="text-sm text-gray-500">Loading notifications...</p>;
@@ -73,7 +68,7 @@ const NotificationsSection = ({
             {notifications.map((n) => (
                 <button
                     key={n.id}
-                    onClick={() => !n.isRead && markRead(n.id)}
+                    onClick={() => openNotification(n)}
                     className={`w-full text-left border rounded-md p-4 transition ${
                         n.isRead
                             ? "border-gray-100 bg-white"

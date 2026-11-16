@@ -1,34 +1,21 @@
 'use client';
 import React, { useState } from 'react';
-import { Package, ChevronDown, ChevronUp } from 'lucide-react';
+import Link from 'next/link';
+import { Package, ChevronDown, ChevronUp, ArrowUpRight } from 'lucide-react';
+import { Order } from 'apps/user-ui/src/types/order';
 
-type OrderItem = {
-    id: string;
-    productId: string;
-    quantity: number;
-    price: number;
+const STATUS_STYLES: Record<string, { label: string; className: string }> = {
+    ordered: { label: "Ordered", className: "bg-yellow-100 text-yellow-700" },
+    packed: { label: "Packed", className: "bg-blue-100 text-blue-700" },
+    shipped: { label: "Shipped", className: "bg-purple-100 text-purple-700" },
+    out_for_delivery: { label: "Out for delivery", className: "bg-indigo-100 text-indigo-700" },
+    delivered: { label: "Delivered", className: "bg-green-100 text-green-700" },
+    cancelled: { label: "Cancelled", className: "bg-red-100 text-red-700" },
 };
 
-type Order = {
-    id: string;
-    total: number;
-    status: string;
-    deliveryStatus: string;
-    createdAt: string;
-    items: OrderItem[];
-    shop?: { id: string; name: string };
-};
+const FALLBACK_STYLE = { label: "Unknown", className: "bg-gray-100 text-gray-700" };
 
-const statusStyles: Record<string, string> = {
-    ordered: "bg-yellow-100 text-yellow-700",
-    processing: "bg-blue-100 text-blue-700",
-    shipped: "bg-purple-100 text-purple-700",
-    delivered: "bg-green-100 text-green-700",
-    cancelled: "bg-red-100 text-red-700",
-};
-
-const formatStatus = (status: string) =>
-    status.charAt(0).toUpperCase() + status.slice(1);
+const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES" });
 
 const OrdersSection = ({
     orders,
@@ -43,7 +30,7 @@ const OrdersSection = ({
         return <p className="text-sm text-gray-500">Loading your orders...</p>;
     }
 
-    if (!orders || orders.length === 0) {
+    if (!orders?.length) {
         return (
             <div className="text-center py-10 text-gray-500">
                 <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
@@ -56,34 +43,32 @@ const OrdersSection = ({
         <div className="space-y-3">
             {orders.map((order) => {
                 const isOpen = expandedId === order.id;
-                const badgeClass =
-                    statusStyles[order.deliveryStatus] || "bg-gray-100 text-gray-700";
+                const status = STATUS_STYLES[order.deliveryStatus] ?? FALLBACK_STYLE;
+                const itemCount = order.items.length;
 
                 return (
-                    <div
-                        key={order.id}
-                        className="border border-gray-200 rounded-md overflow-hidden"
-                    >
+                    <div key={order.id} className="border border-gray-200 rounded-md overflow-hidden">
                         <button
                             onClick={() => setExpandedId(isOpen ? null : order.id)}
+                            aria-expanded={isOpen}
                             className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
                         >
                             <div>
                                 <p className="text-sm font-medium text-gray-800">
                                     Order #{order.id.slice(-8).toUpperCase()}
-                                    {order.shop?.name ? ` · ${order.shop.name}` : ""}
+                                    {order.shop?.name && ` · ${order.shop.name}`}
                                 </p>
                                 <p className="text-xs text-gray-500 mt-0.5">
-                                    {new Date(order.createdAt).toLocaleDateString()} ·{" "}
-                                    {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                                    {new Date(order.createdAt).toLocaleDateString()} · {itemCount} item
+                                    {itemCount !== 1 && "s"}
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
-                                <span className={`text-xs px-2 py-1 rounded-full ${badgeClass}`}>
-                                    {formatStatus(order.deliveryStatus)}
+                                <span className={`text-xs px-2 py-1 rounded-full ${status.className}`}>
+                                    {status.label}
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800">
-                                    ${order.total.toFixed(2)}
+                                    {currency.format(order.total)}
                                 </span>
                                 {isOpen ? (
                                     <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -96,20 +81,28 @@ const OrdersSection = ({
                         {isOpen && (
                             <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-2">
                                 {order.items.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="flex justify-between text-sm text-gray-600"
-                                    >
-                                        <span>
-                                            Product #{item.productId.slice(-6)} × {item.quantity}
+                                    <div key={item.id} className="flex justify-between gap-4 text-sm text-gray-600">
+                                        <span className="truncate">
+                                            {item.product?.title ?? `Product #${item.productId.slice(-6)}`} ×{" "}
+                                            {item.quantity}
                                         </span>
-                                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                                        <span className="shrink-0">
+                                            {currency.format(item.price * item.quantity)}
+                                        </span>
                                     </div>
                                 ))}
+
                                 <div className="flex justify-between text-sm font-semibold text-gray-800 pt-2 border-t border-gray-200">
                                     <span>Total</span>
-                                    <span>${order.total.toFixed(2)}</span>
+                                    <span>{currency.format(order.total)}</span>
                                 </div>
+
+                                <Link
+                                    href={`/order/${order.id}`}
+                                    className="inline-flex items-center gap-1 pt-1 text-xs text-blue-600 hover:underline"
+                                >
+                                    Track order <ArrowUpRight className="w-3 h-3" />
+                                </Link>
                             </div>
                         )}
                     </div>

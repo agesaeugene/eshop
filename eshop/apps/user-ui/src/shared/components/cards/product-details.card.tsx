@@ -1,10 +1,23 @@
+"use client";
+
 import Image from 'next/image';
 import Link from 'next/link';
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import Ratings from '../ratings';
 import { Heart, MapPin, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import CartIcon from 'apps/user-ui/src/assets/svgs/cart-icon';
+import { useStore } from 'apps/user-ui/src/store';
+import useUser from 'apps/user-ui/src/hooks/useUser';
+import useLocationTracking from 'apps/user-ui/src/hooks/useLocationTracking';
+import useDeviceTracking from 'apps/user-ui/src/hooks/useDeviceTracking';
+import axiosInstance from 'apps/user-ui/src/utils/axiosInstance';
+import { isProtected } from 'apps/user-ui/src/utils/protected';
+import { useQueryClient } from '@tanstack/react-query';
+
+const FALLBACK_IMAGE =
+    "https://ik.imagekit.io/eugenesokojamo/products/product-1787479615434_4jn1PmhYW.jpg?updatedAt=1787479618032";
 
 const ProductDetailsCard = ({
     data,
@@ -17,10 +30,104 @@ const ProductDetailsCard = ({
     const [isSelected, setIsSelected] = useState(data?.colors?.[0] || '');
     const [isSizeSelected, setIsSizeSelected] = useState(data?.sizes?.[0] || '');
     const [quantity, setQuantity] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const addToCart = useStore((state: any) => state.addToCart);
+    const removeFromCart = useStore((state: any) => state.removeFromCart);
+    const cart = useStore((state: any) => state.cart);
+    const isInCart = cart.some((item: any) => item.id === data?.id);
+
+    const addToWishlist = useStore((state: any) => state.addToWishlist);
+    const removeFromWishlist = useStore((state: any) => state.removeFromWishlist);
+    const wishlist = useStore((state: any) => state.wishlist);
+    const isWishlisted = wishlist.some((item: any) => item.id === data?.id);
+
+    const { user } = useUser();
+    const location = useLocationTracking();
+    const deviceInfo = useDeviceTracking();
     const router = useRouter();
 
     const estimatedDelivery = new Date();
     estimatedDelivery.setDate(estimatedDelivery.getDate() + 5);
+
+    const mainImage = data?.images?.[activeImage]?.url || FALLBACK_IMAGE;
+    const shopAvatar = data?.shop?.avatar || FALLBACK_IMAGE;
+    const shop = data?.shop ?? data?.Shop;
+
+
+
+    const queryClient = useQueryClient();
+
+
+    const handleChat = async () => {
+        if (isLoading) return;
+
+        if (!user?.id) {
+            toast.error('Please log in to chat with the seller.');
+            router.push('/login');
+            return;
+        }
+
+        const sellerId = data?.shop?.sellerId;
+        if (!sellerId) {
+            toast.error('This seller is not available for chat.');
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const res = await axiosInstance.post(
+                "/chatting/api/create-user-conversationGroup",
+                { sellerId },
+                isProtected
+            );
+
+            const conversationId =
+                res.data?.conversation?.id ?? res.data?.conversationId;
+
+            if (!conversationId) {
+                toast.error('Could not start the conversation.');
+                return;
+            }
+
+            // make sure the inbox loads the new conversation instead of a stale cached list
+            await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+            setOpen(false);
+            router.push(`/inbox?conversationId=${conversationId}`);
+        } catch (error: any) {
+            console.log(error);
+            toast.error(error?.response?.data?.message || 'Failed to start the chat.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAddToCart = () => {
+        if (isInCart) {
+            removeFromCart(data.id, user, location, deviceInfo);
+            return;
+        }
+        addToCart(
+            {
+                ...data,
+                quantity,
+                selectedOptions: { color: isSelected, size: isSizeSelected },
+            },
+            user,
+            location,
+            deviceInfo
+        );
+    };
+
+    const handleWishlist = () => {
+        if (isWishlisted) {
+            removeFromWishlist(data.id, user, location, deviceInfo);
+        } else {
+            addToWishlist({ ...data, quantity: 1 }, user, location, deviceInfo);
+        }
+    };
 
     return (
         <div
@@ -34,7 +141,7 @@ const ProductDetailsCard = ({
                 <div className="w-full flex flex-col md:flex-row">
                     <div className="w-full md:w-1/2 h-full">
                         <Image
-                            src={data?.images?.[activeImage]?.url}
+                            src={mainImage}
                             alt={data?.title || 'Product image'}
                             width={400}
                             height={400}
@@ -46,15 +153,14 @@ const ProductDetailsCard = ({
                             {data?.images?.map((img: any, index: number) => (
                                 <div
                                     key={index}
-                                    className={`cursor-pointer border rounded-md ${
-                                        activeImage === index
-                                            ? 'border-gray-500 pt-1'
-                                            : 'border-transparent'
-                                    }`}
+                                    className={`cursor-pointer border rounded-md ${activeImage === index
+                                        ? 'border-gray-500 pt-1'
+                                        : 'border-transparent'
+                                        }`}
                                     onClick={() => setActiveImage(index)}
                                 >
                                     <Image
-                                        src={img?.url}
+                                        src={img?.url || FALLBACK_IMAGE}
                                         alt={`Thumbnail ${index + 1}`}
                                         width={80}
                                         height={80}
@@ -70,29 +176,26 @@ const ProductDetailsCard = ({
                         <div className="border-b relative pb-3 border-gray-200 flex items-center justify-between">
                             <div className="flex items-start gap-3">
                                 <Image
-                                    src={data?.Shop?.avatar}
+                                    src={shopAvatar}
                                     alt="Shop Logo"
                                     width={60}
                                     height={60}
                                     className="rounded-full w-[60px] h-[60px] object-cover"
                                 />
                                 <div>
-                                    <Link
-                                        href={`/shop/${data?.Shop?.id}`}
-                                        className="text-lg font-medium"
-                                    >
-                                        {data?.Shop?.name}
+                                    <Link href={`/shop/${shop?.id}`} className="text-lg font-medium">
+                                        {shop?.name}
                                     </Link>
 
                                     {/* Shop Ratings */}
                                     <span className="block mt-1">
-                                        <Ratings rating={data?.Shop?.ratings} />
+                                        <Ratings rating={data?.shop?.ratings} />
                                     </span>
 
                                     {/* Shop Location */}
                                     <p className="text-gray-600 mt-1 flex items-center gap-1">
                                         <MapPin size={20} />
-                                        {data?.Shop?.address || 'Location Not Available'}
+                                        {data?.shop?.address || 'Location Not Available'}
                                     </p>
                                 </div>
                             </div>
@@ -100,8 +203,9 @@ const ProductDetailsCard = ({
                             {/* Chat with Seller Button */}
                             <button
                                 type="button"
-                                className="flex cursor-pointer items-center gap-2 px-4 py-2 bg-blue-700 text-white font-medium rounded-md"
-                                onClick={() => router.push(`/inbox?shopId=${data?.Shop?.id}`)}
+                                disabled={isLoading}
+                                className="flex cursor-pointer items-center gap-2 px-4 py-2 bg-blue-700 text-white font-medium rounded-md disabled:opacity-60"
+                                onClick={handleChat}
                             >
                                 💬 Chat with Seller
                             </button>
@@ -138,11 +242,10 @@ const ProductDetailsCard = ({
                                             <button
                                                 type="button"
                                                 key={index}
-                                                className={`w-8 h-8 cursor-pointer rounded-full border-2 transition ${
-                                                    isSelected === color
-                                                        ? 'border-gray-400 scale-110 shadow-md'
-                                                        : 'border-transparent'
-                                                }`}
+                                                className={`w-8 h-8 cursor-pointer rounded-full border-2 transition ${isSelected === color
+                                                    ? 'border-gray-400 scale-110 shadow-md'
+                                                    : 'border-transparent'
+                                                    }`}
                                                 onClick={() => setIsSelected(color)}
                                                 style={{ backgroundColor: color }}
                                             />
@@ -161,11 +264,10 @@ const ProductDetailsCard = ({
                                         <button
                                             type="button"
                                             key={index}
-                                            className={`px-4 py-1 cursor-pointer rounded-md transition ${
-                                                isSizeSelected === size
-                                                    ? 'bg-gray-800 text-white'
-                                                    : 'bg-gray-300 text-black'
-                                            }`}
+                                            className={`px-4 py-1 cursor-pointer rounded-md transition ${isSizeSelected === size
+                                                ? 'bg-gray-800 text-white'
+                                                : 'bg-gray-300 text-black'
+                                                }`}
                                             onClick={() => setIsSizeSelected(size)}
                                         >
                                             {size}
@@ -208,14 +310,24 @@ const ProductDetailsCard = ({
 
                             <button
                                 type="button"
-                                className="flex items-center gap-2 px-4 py-2 bg-[#ff5722] hover:bg-[#e64a19] text-white font-medium rounded-lg transition"
+                                disabled={!(data?.stock > 0)}
+                                className="flex items-center gap-2 px-4 py-2 bg-[#ff5722] hover:bg-[#e64a19] text-white font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={handleAddToCart}
                             >
                                 <CartIcon size={18} />
-                                Add to Cart
+                                {isInCart ? 'Remove from Cart' : 'Add to Cart'}
                             </button>
 
-                            <button type="button" className="opacity-[.7] cursor-pointer">
-                                <Heart size={30} fill="red" color="transparent" />
+                            <button
+                                type="button"
+                                className="opacity-[.7] cursor-pointer"
+                                onClick={handleWishlist}
+                            >
+                                <Heart
+                                    size={30}
+                                    fill={isWishlisted ? 'red' : 'transparent'}
+                                    color={isWishlisted ? 'red' : '#4B5563'}
+                                />
                             </button>
                         </div>
 

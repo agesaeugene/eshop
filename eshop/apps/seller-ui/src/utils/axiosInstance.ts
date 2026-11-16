@@ -42,7 +42,6 @@ axiosInstance.interceptors.response.use(
         //Prevetin infinite retry loop
         if (error.response?.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {
-                // If a refresh is already in progress, queue the request
                 return new Promise((resolve) => {
                     subscribeTokenRefresh(() => {
                         resolve(axiosInstance(originalRequest));

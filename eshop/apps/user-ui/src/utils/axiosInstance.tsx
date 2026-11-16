@@ -44,7 +44,6 @@ axiosInstance.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
-
         const is401 = error?.response?.status === 401;
         const isRetry = originalRequest?._retry;
         const isAuthRequired = originalRequest?.requireAuth === true;
@@ -52,53 +51,20 @@ axiosInstance.interceptors.response.use(
         if (is401 && !isRetry && isAuthRequired) {
             if (isRefreshing) {
                 return new Promise((resolve) => {
-                    subscribeTokenRefresh(() => resolve(axiosInstance(originalRequest)))
-                })
-            }
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            if (error.response?.status === 401 && !originalRequest._retry) {
-            if (isRefreshing) {
-                // If a refresh is already in progress, queue the request
-                return new Promise((resolve) => {
-                    subscribeTokenRefresh(() => {
-                        resolve(axiosInstance(originalRequest));
-                    });
+                    subscribeTokenRefresh(() => resolve(axiosInstance(originalRequest)));
                 });
             }
-            
             originalRequest._retry = true;
             isRefreshing = true;
-            try {
-                await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URI}/api/refresh-token`, {}, { withCredentials: true });
-                isRefreshing = false;
-                onRefreshSuccess();
-                return axiosInstance(originalRequest);
-            }
-                catch (err) {   
-                    isRefreshing = false;
-                    refreshSubscribers = [];
-                    handleLogout();
-                    return Promise.reject(error);
-
-                }
-    }
-
-            
         }
 
-        //Prevetin infinite retry loop
         if (error.response?.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {
-                // If a refresh is already in progress, queue the request
                 return new Promise((resolve) => {
-                    subscribeTokenRefresh(() => {
-                        resolve(axiosInstance(originalRequest));
-                    });
+                    subscribeTokenRefresh(() => resolve(axiosInstance(originalRequest)));
                 });
             }
-            
+
             originalRequest._retry = true;
             isRefreshing = true;
             try {
@@ -106,17 +72,15 @@ axiosInstance.interceptors.response.use(
                 isRefreshing = false;
                 onRefreshSuccess();
                 return axiosInstance(originalRequest);
+            } catch (refreshError) {
+                isRefreshing = false;
+                refreshSubscribers = [];
+                handleLogout();
+                return Promise.reject(error);
             }
-                catch (err) {   
-                    isRefreshing = false;
-                    refreshSubscribers = [];
-                    handleLogout();
-                    return Promise.reject(error);
-
-                }
+        }
+        return Promise.reject(error);
     }
-    return Promise.reject(error);
-}
 );
 
 export default axiosInstance;

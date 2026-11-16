@@ -31,10 +31,13 @@ model users {
   name      String
   email     String        @unique
   password  String?
+  role      String?       @default("user")  
+  notificationPreferences Json?
   following String[]
   avatar    images?                
   reviews   shopReviews[]
-  orders    orders[]            
+  orders    orders[]
+  isBanned  Boolean?            
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 }
@@ -80,18 +83,39 @@ model sellers {
   phone_number String
   country      String
   mpesa_number   String?
-  stripeId       String?
   phone_verified Boolean @default(false)
   password     String
+  notificationPreferences Json?
   shop         shops?           
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model accountActivity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId     String   @db.ObjectId
+  role        String
+  isOnline    Boolean  @default(false)
+  lastLoginAt DateTime?
+  lastSeenAt  DateTime?
+  lastLogoutAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([role, ownerId])
 }
 
 model site_config {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   categories    String[]
   subCategories Json
+  logo          String?
+  banner        String?
+  supportEmail  String?
+  currency      String?
+  timezone      String?
+  maintenanceMode Boolean?
+  allowSellerRegistration Boolean?
+  allowUserRegistration Boolean?
 }
 
 model discount_codes {
@@ -127,6 +151,7 @@ model products {
   sizes                 String[]
   starting_date         DateTime?
   ending_date            DateTime?
+  eventStatus            String?
   stock                 Int
   sale_price             Float
   regular_price          Float
@@ -160,11 +185,81 @@ model orders {
   discountAmount  Float?
   status          String       @default("Pending")
   deliveryStatus  String       @default("ordered")
+  paymentMethod   String       @default("mpesa")
+  paymentReference String?
 
   items           orderItems[]
 
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+}
+
+model wallets {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId             String   @db.ObjectId
+  ownerType           String
+  currency            String   @default("KES")
+  balanceMinor        Int      @default(0)
+  pendingBalanceMinor Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([ownerType, ownerId])
+}
+
+model walletTransactions {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  walletId       String   @db.ObjectId
+  ownerId        String   @db.ObjectId
+  ownerType      String
+  type           String
+  amountMinor    Int
+  balanceAfter   Int
+  pendingAfter   Int      @default(0)
+  status         String   @default("complete")
+  reference      String   @unique
+  paymentSessionId String?
+  description    String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+}
+
+model paymentSessions {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId         String   @unique
+  apiRef            String   @unique
+  userId            String   @db.ObjectId
+  kind              String   @default("purchase")
+  status            String   @default("pending")
+  paymentMethod     String   @default("mpesa")
+  cart              Json
+  totalAmount       Float
+  paymentAmountMinor Int
+  currency          String   @default("KES")
+  shippingAddressId String?
+  coupon            Json?
+  invoiceId         String?
+  providerRef       String?
+  clearingStatus    String?
+  failureReason     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model withdrawalRequests {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  sellerId              String   @db.ObjectId
+  walletId              String   @db.ObjectId
+  amountMinor           Int
+  phoneNumber           String
+  status                String   @default("pending")
+  reference             String   @unique
+  providerTrackingId    String?
+  providerTransactionId String?
+  approvedBy            String?  @db.ObjectId
+  failureReason         String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model orderItems {
@@ -191,7 +286,7 @@ model address {
   userId    String      @db.ObjectId
   label     addressType
   name      String
-  Street    String
+  street    String      @map("Street")
   city      String
   zip       String
   country   String
@@ -253,4 +348,38 @@ model notifications {
   isRead        Boolean  @default(false)
   redirect_link String?
   createdAt     DateTime @default(now())
+}
+
+model conversationGroup {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  isGroup         Boolean  @default(false)
+  name            String?
+  creatorId       String
+  participantIds String[] @db.ObjectId
+  productContext  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model participant {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  userId         String?  @db.ObjectId
+  sellerId       String?  @db.ObjectId
+  lastSeenAt     DateTime?
+  isOnline       Boolean  @default(false)
+  unreadCount    Int      @default(0)
+  muted          Boolean  @default(false)
+  joinedAt       DateTime @default(now())
+}
+
+model message {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  senderId       String   @db.ObjectId
+  senderType     String
+  content        String
+  attachments    String[] @default([])
+  status         String   @default("sent")
+  createdAt      DateTime @default(now())
 }

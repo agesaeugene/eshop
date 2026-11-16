@@ -1,4 +1,4 @@
-import crypto from "crypto"
+import crypto from "crypto";
 import { ValidationError } from "@packages/error-handler";
 import redis from "@packages/libs/redis";
 import { sendEmail } from "./sendMail";
@@ -10,6 +10,19 @@ import { setCookie } from "./cookies/setCookie";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Role = "user" | "seller" | "admin";
+
+const TOKEN_COOKIES: Record<Role, { refresh: string; access: string }> = {
+    user:   { refresh: "refresh_token",        access: "access_token" },
+    seller: { refresh: "seller-refresh-token", access: "seller-access-token" },
+    admin:  { refresh: "admin-refresh-token",  access: "admin-access-token" },
+};
+
+// admins are stored in the `users` collection
+const findAccountByEmail = (role: Role, email: string) =>
+    role === "seller"
+        ? prisma.sellers.findUnique({ where: { email } })
+        : prisma.users.findUnique({ where: { email } });
 
 export const validateRegistrationData = (data: any, userType: "user" | "seller") => {
     const { name, email, password, phone_number, country } = data;
@@ -17,7 +30,7 @@ export const validateRegistrationData = (data: any, userType: "user" | "seller")
     if (
         !name || !email || !password || (userType === "seller" && (!phone_number || !country))
     ) {
-        throw new ValidationError('Missing required fields!');
+        throw new ValidationError("Missing required fields!");
     }
 
     if (!emailRegex.test(email)) {
@@ -28,7 +41,7 @@ export const validateRegistrationData = (data: any, userType: "user" | "seller")
 export const checkOtpRestrictions = async (
     email: string,
     next: NextFunction,
-    role: "user" | "seller" | "admin" = "user"
+    role: Role = "user"
 ): Promise<boolean> => {
     if (await redis.get(`otp_lock:${role}:${email}`)) {
         next(new ValidationError("Account locked due to multiple failed attempts! Try again after 30 minutes."));
@@ -45,69 +58,33 @@ export const checkOtpRestrictions = async (
     return false;
 };
 
-export const validateRegistrationData = (data: any, userType: "user" | "seller") => {
-    const { name, email, password, phone_number, country } = data;
-
-    if (
-        !name || !email || !password || (userType === "seller" && (!phone_number || !country))
-    ) {
-        throw new ValidationError('Missing required fields!');
-    }
-
-    if (!emailRegex.test(email)) {
-        throw new ValidationError("Invalid email format!");
-    }
-};
-
-// export const checkOtpRestrictions = async (
-//     email: string,
-//     next: NextFunction,
-//     role: "user" | "seller" | "admin" = "user"
-// ): Promise<boolean> => {
-//     if (await redis.get(`otp_lock:${role}:${email}`)) {
-//         throw new ValidationError("Account locked due to multiple failed attempts! Try again after 30 minutes.");
-//         return true;
-//     }
-//     if (await redis.get(`otp_spam_lock:${role}:${email}`)) {
-//         return next(new ValidationError("Too many OTP requests! Please wait 1 hour and try again."));
-        
-//     }
-//     if (await redis.get(`otp_cooldown:${role}:${email}`)) {
-//         new ValidationError("Please wait a minute before requesting a new OTP again!");
-        
-//     }
-//     return false;
-// };
-
 export const trackOtpRequests = async (
     email: string,
     next: NextFunction,
-    role: "user" | "seller" | "admin" = "user"
+    role: Role = "user"
 ): Promise<boolean> => {
     const otpRequestKey = `otp_requests_count:${role}:${email}`;
-    const otpRequests = parseInt((await redis.get(otpRequestKey)) || '0');
+    const otpRequests = parseInt((await redis.get(otpRequestKey)) || "0");
 
     if (otpRequests >= 2) {
-        await redis.set(`otp_spam_lock:${role}:${email}`, 'locked', 'EX', 60 * 60);
+        await redis.set(`otp_spam_lock:${role}:${email}`, "locked", "EX", 60 * 60);
         next(new ValidationError("Too many OTP requests! Please wait 1 hour and try again."));
         return true;
     }
 
-    await redis.set(otpRequestKey, otpRequests + 1, 'EX', 60 * 60);
+    await redis.set(otpRequestKey, otpRequests + 1, "EX", 60 * 60);
     return false;
 };
 
 export const sendOtp = async (
-    name: string, 
-    email: string, 
+    name: string,
+    email: string,
     template: string,
-    role: "user" | "seller" | "admin" = "user" 
+    role: Role = "user"
 ) => {
     const otp = crypto.randomInt(1000, 9999).toString();
-    await redis.set(`otp:${role}:${email}`, otp, 'EX', 5 * 60);
-    await redis.set(`otp_cooldown:${role}:${email}`, 'true', 'EX', 60);
-    // for security purposes remove the console log later
-    console.log(`[DEBUG] OTP stored for ${email}: "${otp}" | Redis key: "otp:${email}"`);
+    await redis.set(`otp:${role}:${email}`, otp, "EX", 5 * 60);
+    await redis.set(`otp_cooldown:${role}:${email}`, "true", "EX", 60);
     await sendEmail(email, "Verify Your Email", template, { name, otp });
 };
 
@@ -115,11 +92,10 @@ export const verifyOtp = async (
     email: string,
     otp: string,
     next: NextFunction,
-    role: "user" | "seller" | "admin" = "user"
+    role: Role = "user"
 ): Promise<boolean> => {
     const redisKey = `otp:${role}:${email}`;
     const storedOtp = await redis.get(redisKey);
-    console.log(`[DEBUG] Verifying OTP for ${email} | Redis key: "${redisKey}" | Stored: "${storedOtp}" | Submitted: "${otp}"`);
 
     if (!storedOtp) {
         next(new ValidationError("OTP expired! Please request a new one."));
@@ -127,17 +103,17 @@ export const verifyOtp = async (
     }
 
     const failedAttemptsKey = `otp_failed_attempts:${role}:${email}`;
-    const failedAttempts = parseInt((await redis.get(failedAttemptsKey)) || '0');
+    const failedAttempts = parseInt((await redis.get(failedAttemptsKey)) || "0");
 
     if (storedOtp !== otp) {
         if (failedAttempts >= 2) {
-            await redis.set(`otp_lock:${role}:${email}`, 'locked', 'EX', 30 * 60);
+            await redis.set(`otp_lock:${role}:${email}`, "locked", "EX", 30 * 60);
             await redis.del(`otp:${role}:${email}`, failedAttemptsKey);
             next(new ValidationError("Account locked due to multiple failed attempts! Try again after 30 minutes."));
             return false;
         }
 
-        await redis.set(failedAttemptsKey, failedAttempts + 1, 'EX', 30 * 60);
+        await redis.set(failedAttemptsKey, failedAttempts + 1, "EX", 30 * 60);
         next(new ValidationError(`Invalid OTP! You have ${2 - failedAttempts} attempts left before your account gets locked.`));
         return false;
     }
@@ -150,42 +126,32 @@ export const handleForgotPassword = async (
     req: Request,
     res: Response,
     next: NextFunction,
-    userType: "user" | "seller" | "admin"
+    userType: Role
 ) => {
     try {
         const { email } = req.body;
 
         if (!email) throw new ValidationError("Email is required!");
 
-        // Find user/seller in DB
-        // FIX: prisma.seller → prisma.sellers  (must match the plural model name used throughout the codebase)
-        const user =
-            userType === "user"
-                ? await prisma.users.findUnique({ where: { email } })
-                : await prisma.sellers.findUnique({ where: { email } });
-
+        const user = await findAccountByEmail(userType, email);
         if (!user) throw new ValidationError(`No ${userType} found with this email!`);
 
-        // Check OTP restrictions - stop execution if restricted
         const isRestricted = await checkOtpRestrictions(email, next, userType);
         if (isRestricted) return;
 
-        // Track OTP requests - stop execution if spam limit hit
         const isSpamBlocked = await trackOtpRequests(email, next, userType);
         if (isSpamBlocked) return;
 
-        // Send OTP to email
         const template =
-            userType === "user"
-                ? "user-forgot-password-mail"
-                : "seller-forgot-password-mail";
+            userType === "seller"
+                ? "seller-forgot-password-mail"
+                : "user-forgot-password-mail";
 
         await sendOtp(user.name, email, template, userType);
 
         res.status(200).json({
             message: "OTP sent to email for password reset. Please verify your account!",
         });
-
     } catch (error) {
         next(error);
     }
@@ -194,7 +160,8 @@ export const handleForgotPassword = async (
 export const verifyForgotPasswordOtp = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
+    userType: Role = "user"
 ) => {
     try {
         const { email, otp } = req.body;
@@ -203,8 +170,11 @@ export const verifyForgotPasswordOtp = async (
             throw new ValidationError("Email and OTP are required!");
         }
 
-        const isValid = await verifyOtp(email, otp, next);
+        const isValid = await verifyOtp(email, otp, next, userType);
         if (!isValid) return;
+
+        // proof that the OTP was verified; required by the reset step
+        await redis.set(`reset_verified:${userType}:${email}`, "true", "EX", 10 * 60);
 
         res.status(200).json({
             success: true,
@@ -219,7 +189,7 @@ export const handleResetPassword = async (
     req: Request,
     res: Response,
     next: NextFunction,
-    userType: "user" | "seller"
+    userType: Role
 ) => {
     try {
         const { email, newPassword } = req.body;
@@ -228,36 +198,33 @@ export const handleResetPassword = async (
             throw new ValidationError("Email and new password are required!");
         }
 
-        // Find user/seller in DB
-        // FIX: prisma.seller → prisma.sellers  (must match the plural model name used throughout the codebase)
-        const user =
-            userType === "user"
-                ? await prisma.users.findUnique({ where: { email } })
-                : await prisma.sellers.findUnique({ where: { email } });
+        const verifiedKey = `reset_verified:${userType}:${email}`;
+        if (!(await redis.get(verifiedKey))) {
+            throw new ValidationError("OTP verification required before resetting your password!");
+        }
 
+        const user = await findAccountByEmail(userType, email);
         if (!user) throw new ValidationError(`No ${userType} found with this email!`);
 
         // Prevent reusing the same password
-        const isSamePassword = await bcrypt.compare(newPassword, user.password!);
-        if (isSamePassword) {
+        if (user.password && (await bcrypt.compare(newPassword, user.password))) {
             throw new ValidationError("New password cannot be the same as the old password!");
         }
 
-        // Hash and save new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        if (userType === "user") {
-            await prisma.users.update({ where: { email }, data: { password: hashedPassword } });
-        } else {
-            
+        if (userType === "seller") {
             await prisma.sellers.update({ where: { email }, data: { password: hashedPassword } });
+        } else {
+            await prisma.users.update({ where: { email }, data: { password: hashedPassword } });
         }
+
+        await redis.del(verifiedKey); // single use
 
         res.status(200).json({
             success: true,
             message: "Password reset successfully!",
         });
-
     } catch (error) {
         next(error);
     }
@@ -269,44 +236,50 @@ export const refreshToken = async (
     next: NextFunction
 ) => {
     try {
-        const token = req.cookies?.refresh_token;
+        // user first, so existing customer behaviour is unchanged
+        const role = (["user", "seller", "admin"] as Role[]).find(
+            (r) => req.cookies?.[TOKEN_COOKIES[r].refresh]
+        );
 
-        if (!token) {
+        if (!role) {
             throw new ValidationError("Refresh token not found! Please log in again.");
         }
 
-        // Verify the refresh token
         const decoded = jwt.verify(
-            token,
+            req.cookies[TOKEN_COOKIES[role].refresh],
             process.env.REFRESH_TOKEN_SECRET as string
         ) as { id: string; role?: string };
 
-        if ( !decoded || !decoded?.id || !decoded?.role) {
+        if (!decoded?.id || decoded.role !== role) {
             throw new ValidationError("Invalid refresh token! Please log in again.");
         }
 
-        const user = await prisma.users.findUnique({ where: { id: decoded.id } });
-        if (!user) {
-            throw new ValidationError("User not found! Please log in again.");
+        const account =
+            role === "seller"
+                ? await prisma.sellers.findUnique({ where: { id: decoded.id } })
+                : await prisma.users.findUnique({ where: { id: decoded.id } });
+
+        if (!account) {
+            throw new ValidationError("Account not found! Please log in again.");
         }
 
-        // Issue a new access token
+        if (role === "admin" && (account as any).role !== "admin") {
+            throw new ValidationError("Invalid access!");
+        }
+
         const newAccessToken = jwt.sign(
-            { id: decoded.id, role: decoded.role ?? "user" },
+            { id: decoded.id, role },
             process.env.ACCESS_TOKEN_SECRET as string,
             { expiresIn: "15m" }
         );
 
-        // Set new access token in cookie
-        setCookie(res, "access_token", newAccessToken);
+        setCookie(res, TOKEN_COOKIES[role].access, newAccessToken);
 
         res.status(200).json({
             success: true,
             message: "Access token refreshed successfully!",
         });
-
     } catch (error) {
-        // jwt.verify throws on expiry/invalid — treat as auth failure
         if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
             return next(new ValidationError("Invalid or expired refresh token! Please log in again."));
         }

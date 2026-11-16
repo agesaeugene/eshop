@@ -73,6 +73,14 @@ export const updateUserAnalytics = async (event: any) => {
             },
         });
 
+        if (event.action === "product_view" && event.shopId && event.userId) {
+            await prisma.uniqueShopVisitors.upsert({
+                where: { shopId_userId: { shopId: event.shopId, userId: event.userId } },
+                update: {},
+                create: { shopId: event.shopId, userId: event.userId },
+            });
+        }
+
         if (!event.productId) return;
         await updateProductAnalytics(event);
     } catch (error) {

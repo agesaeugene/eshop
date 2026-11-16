@@ -2,16 +2,16 @@
 
 import ImagePlaceHolder from 'apps/seller-ui/src/shared/components/image-placeholder';
 import { ChevronRight, Wand, X } from 'lucide-react';
-import Input from '../../../../../../../packages/compoonents/input';
+import Input from '../../../../../../../packages/components/Input';
 import React, { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import ColorSelector from '../../../../../../../packages/compoonents/color-selector';
-import CustomSpecifications from 'packages/compoonents/custom-specifications';
-import CustomProperties from 'packages/compoonents/custom-properties';
+import ColorSelector from '../../../../../../../packages/components/color-selector';
+import CustomSpecifications from 'packages/components/custom-specifications';
+import CustomProperties from 'packages/components/custom-properties';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from 'apps/seller-ui/src/utils/axiosInstance';
-import RichTextEditor from 'packages/compoonents/rich-text-editor';
-import SizeSelector from 'packages/compoonents/size-selector';
+import RichTextEditor from 'packages/components/rich-text-editor';
+import SizeSelector from 'packages/components/size-selector';
 import Image from 'next/image';
 import { enhancements } from 'apps/seller-ui/src/utils/AI.enhancements';
 import { useRouter } from 'next/navigation';

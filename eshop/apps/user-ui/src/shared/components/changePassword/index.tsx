@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation } from '@tanstack/react-query';
 import axiosInstance from 'apps/user-ui/src/utils/axiosInstance';
@@ -9,6 +9,7 @@ type FormData = {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
+    otp?: string;
 };
 
 const ChangePasswordSection = () => {
@@ -16,6 +17,8 @@ const ChangePasswordSection = () => {
     const [showNew, setShowNew] = useState(false);
     const [serverError, setServerError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
+    const [cooldown, setCooldown] = useState(0);
 
     const {
         register,
@@ -27,6 +30,35 @@ const ChangePasswordSection = () => {
 
     const newPassword = watch("newPassword");
 
+    useEffect(() => {
+        if (cooldown <= 0) return;
+        const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+        return () => clearTimeout(t);
+    }, [cooldown]);
+
+    const getErrorMessage = (error: any) =>
+        error?.response?.data?.message || "Something went wrong. Please try again.";
+
+    // Step 1: validate passwords + email the OTP
+    const { mutate: requestOtp, isPending: sendingOtp } = useMutation({
+        mutationFn: async (data: FormData) => {
+            const { currentPassword, newPassword, confirmPassword } = data;
+            const res = await axiosInstance.post("/api/change-password/send-otp", {
+                currentPassword,
+                newPassword,
+                confirmPassword,
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            setServerError(null);
+            setOtpSent(true);
+            setCooldown(60);
+        },
+        onError: (error: any) => setServerError(getErrorMessage(error)),
+    });
+
+    // Step 2: submit with the OTP
     const { mutate: changePassword, isPending } = useMutation({
         mutationFn: async (data: FormData) => {
             const res = await axiosInstance.put("/api/change-password", data);
@@ -35,21 +67,29 @@ const ChangePasswordSection = () => {
         onSuccess: () => {
             setServerError(null);
             setSuccess(true);
+            setOtpSent(false);
+            setCooldown(0);
             reset();
             setTimeout(() => setSuccess(false), 4000);
         },
         onError: (error: any) => {
             setSuccess(false);
-            setServerError(
-                error?.response?.data?.message || "Something went wrong. Please try again."
-            );
+            setServerError(getErrorMessage(error));
         },
     });
 
     const onSubmit = (data: FormData) => {
         setServerError(null);
-        changePassword(data);
+        if (!otpSent) requestOtp(data);
+        else changePassword(data);
     };
+
+    const onResend = (data: FormData) => {
+        setServerError(null);
+        requestOtp(data);
+    };
+
+    const busy = isPending || sendingOtp;
 
     return (
         <div className="max-w-md space-y-4">
@@ -142,12 +182,54 @@ const ChangePasswordSection = () => {
                     )}
                 </div>
 
+                {otpSent && (
+                    <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Verification Code
+                        </label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            placeholder="4-digit code sent to your email"
+                            {...register("otp", {
+                                validate: (v) =>
+                                    !otpSent || /^\d{4}$/.test(v || "") || "Enter the 4-digit code",
+                            })}
+                            className="form-input"
+                        />
+                        {errors.otp && (
+                            <p className="text-red-500 text-xs mt-1">{errors.otp.message}</p>
+                        )}
+                        <div className="text-xs text-gray-500 mt-2">
+                            {cooldown > 0 ? (
+                                `Resend code in ${cooldown}s`
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={handleSubmit(onResend)}
+                                    className="text-blue-500 hover:underline"
+                                >
+                                    Resend code
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <button
                     type="submit"
-                    disabled={isPending}
+                    disabled={busy}
                     className="w-full bg-blue-600 text-white text-sm py-2 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
                 >
-                    {isPending ? "Updating..." : "Update Password"}
+                    {sendingOtp
+                        ? "Sending code..."
+                        : isPending
+                        ? "Updating..."
+                        : otpSent
+                        ? "Verify & Update Password"
+                        : "Send Verification Code"}
                 </button>
             </form>
         </div>

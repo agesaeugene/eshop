@@ -19,7 +19,6 @@ import {
   Users, 
   ShoppingBag, 
   DollarSign, 
-  Globe 
 } from "lucide-react";
 
 // Types
@@ -53,25 +52,26 @@ interface DashboardStats {
   visitorsDistribution: VisitorData[];
   recentOrders: RecentOrder[];
   totalRevenue: number;
+  totalOrders: number;
+  totalVisitors: number;
+  conversionRate: number;
 }
 
 const DashboardPage = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Replace with your actual API endpoint
-        const response = await axiosInstance.get(
-          `${process.env.NEXT_PUBLIC_ORDER_SERVICE_URL}/get-dashboard-stats`,
-          { withCredentials: true }
-        );
+        const response = await axiosInstance.get("/order/api/get-dashboard-stats");
         if (response.data.success) {
           setStats(response.data.stats);
         }
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);
+        setLoadError("Dashboard data could not be loaded. Please refresh and try again.");
       } finally {
         setLoading(false);
       }
@@ -88,7 +88,7 @@ const DashboardPage = () => {
     );
   }
 
-  if (!stats) return <div className="text-white p-8">Failed to load data.</div>;
+  if (!stats) return <div role="alert" className="m-8 rounded-xl border border-red-800 bg-red-950 p-5 text-red-200">{loadError || "Dashboard data could not be loaded."}</div>;
 
   return (
     <div className="p-6 space-y-6 bg-black min-h-screen text-slate-200">
@@ -104,27 +104,27 @@ const DashboardPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatCard 
           title="Total Revenue" 
-          value={`$${stats.totalRevenue.toLocaleString()}`} 
+          value={`KES ${stats.totalRevenue.toLocaleString()}`}
           icon={<DollarSign className="text-emerald-400" />} 
-          trend="+12.5%"
+          trend="All time"
         />
         <StatCard 
           title="Total Orders" 
-          value={stats.recentOrders.length.toString()} 
+          value={stats.totalOrders.toLocaleString()}
           icon={<ShoppingBag className="text-blue-400" />} 
-          trend="+5.2%"
+          trend="All time"
         />
         <StatCard 
           title="Visitors" 
-          value="1,240" 
+          value={stats.totalVisitors.toLocaleString()}
           icon={<Users className="text-purple-400" />} 
-          trend="+18.1%"
+          trend="Unique visitors"
         />
         <StatCard 
           title="Conversion Rate" 
-          value="3.2%" 
+          value={`${stats.conversionRate.toFixed(1)}%`}
           icon={<TrendingUp className="text-yellow-400" />} 
-          trend="-0.4%"
+          trend="Purchases / views"
         />
       </div>
 
@@ -160,7 +160,7 @@ const DashboardPage = () => {
                   fontSize={12} 
                   tickLine={false} 
                   axisLine={false} 
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(value) => `KES ${value}`}
                 />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }}
@@ -208,17 +208,20 @@ const DashboardPage = () => {
             </ResponsiveContainer>
             {/* Center Text */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-2xl font-bold text-white">100%</span>
+              <span className="text-2xl font-bold text-white">
+                {stats.deviceUsage.reduce((total, entry) => total + entry.value, 0)}
+              </span>
             </div>
           </div>
           {/* Legend */}
-          <div className="flex justify-center gap-4 mt-4">
+          <div className="flex flex-wrap justify-center gap-4 mt-4">
             {stats.deviceUsage.map((device) => (
               <div key={device.name} className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: device.color }}></div>
                 <span className="text-xs text-slate-400">{device.name}</span>
               </div>
             ))}
+            {stats.deviceUsage.length === 0 && <span className="text-xs text-slate-500">Device data not available yet</span>}
           </div>
         </div>
       </div>
@@ -231,24 +234,18 @@ const DashboardPage = () => {
             <h2 className="text-lg font-semibold text-white">Visitors Distribution</h2>
             <p className="text-xs text-slate-500">Visual breakdown of global visitors activity</p>
           </div>
-          <div className="h-[250px] bg-slate-900/50 rounded-lg flex items-center justify-center relative overflow-hidden">
-             {/* Simple Visual Representation of a Map */}
-             <div className="absolute inset-0 opacity-20" 
-                  style={{ 
-                    backgroundImage: 'radial-gradient(circle, #3b82f6 1px, transparent 1px)', 
-                    backgroundSize: '20px 20px' 
-                  }}>
-             </div>
-             <Globe className="w-32 h-32 text-slate-700 absolute" />
-             
-             {/* Overlay Data Dots */}
-             <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-             <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-75"></div>
-             <div className="absolute bottom-1/3 left-1/2 w-2 h-2 bg-green-500 rounded-full animate-pulse delay-150"></div>
-             
-             <div className="absolute bottom-4 right-4 text-xs text-slate-400">
-                Live Map Integration Required
-             </div>
+          <div className="space-y-3">
+            {stats.visitorsDistribution.map((entry) => (
+              <div key={entry.country} className="flex items-center justify-between rounded-lg bg-slate-900/60 px-4 py-3">
+                <span className="text-sm text-slate-300">{entry.country}</span>
+                <span className="text-sm font-semibold text-white">{entry.visitors.toLocaleString()}</span>
+              </div>
+            ))}
+            {stats.visitorsDistribution.length === 0 && (
+              <p className="rounded-lg bg-slate-900/60 px-4 py-8 text-center text-sm text-slate-500">
+                Visitor location data will appear when customers view your products.
+              </p>
+            )}
           </div>
         </div>
 
@@ -273,7 +270,7 @@ const DashboardPage = () => {
                   <tr key={order.id} className="border-b border-slate-800/50 hover:bg-slate-900/30">
                     <td className="px-4 py-3 font-medium text-white">{order.id}</td>
                     <td className="px-4 py-3 text-slate-300">{order.customer}</td>
-                    <td className="px-4 py-3 text-slate-300">${order.amount}</td>
+                    <td className="px-4 py-3 text-slate-300">KES {order.amount.toLocaleString()}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         order.status === 'paid' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -305,8 +302,8 @@ const StatCard = ({ title, value, icon, trend }: { title: string, value: string,
     <div>
       <p className="text-slate-400 text-sm mb-1">{title}</p>
       <h3 className="text-2xl font-bold text-white">{value}</h3>
-      <p className={`text-xs mt-2 ${trend.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
-        {trend} <span className="text-slate-500">vs last month</span>
+      <p className="text-xs mt-2 text-slate-500">
+        {trend}
       </p>
     </div>
     <div className="p-3 bg-slate-900/50 rounded-lg">

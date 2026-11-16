@@ -5,16 +5,20 @@ import Image from 'next/image'
 import ReactImageMagnify from "react-image-magnify"
 import Ratings from '../../components/ratings'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from 'apps/user-ui/src/store'
 import CartIcon from 'apps/user-ui/src/assets/svgs/cart-icon'
 import useUser from 'apps/user-ui/src/hooks/useUser'
 import useLocationTracking from 'apps/user-ui/src/hooks/useLocationTracking'
 import useDeviceTracking from 'apps/user-ui/src/hooks/useDeviceTracking'
 import axiosInstance from 'apps/user-ui/src/utils/axiosInstance'
+import { isProtected } from 'apps/user-ui/src/utils/protected'
 import ProductCard from '../../components/cards/product-card'
 
 const ProductDetails = ({ productDetails }: { productDetails: any }) => {
-    const { user, isloading } = useUser();
+    const { user } = useUser();
     const location = useLocationTracking();
     const deviceInfo = useDeviceTracking();
     const [currentImage, setCurrentImage] = useState(
@@ -40,9 +44,32 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
     const addToWishlist = useStore((state: any) => state.addToWishlist);
     const removeFromWishlist = useStore((state: any) => state.removeFromWishlist);
     const wishlist = useStore((state: any) => state.wishlist);
+    const router = useRouter();
+    const queryClient = useQueryClient();
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const [isBuyingNow, setIsBuyingNow] = useState(false);
+    const [selectedAddressId, setSelectedAddressId] = useState("");
+    const {
+        data: addresses = [],
+        isLoading: isAddressesLoading,
+        isError: isAddressError,
+    } = useQuery<any[]>({
+        queryKey: ["shipping-addresses"],
+        queryFn: async () => (await axiosInstance.get("/api/shipping-addresses")).data.addresses,
+        enabled: !!user?.id,
+    });
     const isWishlisted = wishlist.some(
         (item: any) => item.id === productDetails.id
     );
+
+    // Support both `shop` and `Shop` (Prisma relation casing)
+    const shop = productDetails?.shop ?? productDetails?.Shop;
+
+    useEffect(() => {
+        if (addresses.length > 0 && !selectedAddressId) {
+            setSelectedAddressId((addresses.find((item) => item.isDefault) || addresses[0]).id);
+        }
+    }, [addresses, selectedAddressId]);
 
     // Navigate to previous image
     const prevImage = () => {
@@ -78,6 +105,99 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
             setRecommendedProducts(res.data.products);
         } catch (error) {
             console.error("Failed to fetch filtered products", error);
+        }
+    };
+
+    // Start (or reopen) a conversation with the seller, then go to the inbox
+    const handleChat = async () => {
+        if (isChatLoading) return;
+
+        if (!user?.id) {
+            toast.error('Please log in to chat with the seller.');
+            router.push('/login');
+            return;
+        }
+
+        const sellerId = shop?.sellerId;
+        if (!sellerId) {
+            toast.error('This seller is not available for chat.');
+            return;
+        }
+
+        setIsChatLoading(true);
+
+        try {
+            const res = await axiosInstance.post(
+                "/chatting/api/create-user-conversationGroup",
+                { sellerId, productId: productDetails.id },
+                isProtected
+            );
+
+            const conversationId =
+                res.data?.conversation?.id ?? res.data?.conversationId;
+
+            if (!conversationId) {
+                toast.error('Could not start the conversation.');
+                return;
+            }
+
+            // make sure the inbox loads the new conversation instead of a stale cached list
+            await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+            router.push(`/inbox?conversationId=${conversationId}`);
+        } catch (error: any) {
+            console.log(error);
+            toast.error(error?.response?.data?.message || 'Failed to start the chat.');
+        } finally {
+            setIsChatLoading(false);
+        }
+    };
+
+    const handleBuyNow = async () => {
+        if (!user?.id) {
+            toast.error("Please log in before checking out.");
+            router.push("/login");
+            return;
+        }
+        if (!productDetails?.id || productDetails.stock < quantity) {
+            toast.error("This product does not have enough stock for the selected quantity.");
+            return;
+        }
+        if (isAddressesLoading) {
+            toast.error("Loading your delivery addresses. Please try again in a moment.");
+            return;
+        }
+        if (isAddressError) {
+            toast.error("Could not load your delivery addresses. Please try again.");
+            return;
+        }
+        const address = addresses.find((item) => item.id === selectedAddressId);
+        if (!address) {
+            toast.error("Add a delivery address before checking out.");
+            router.push("/profile?active=Shipping%20Address");
+            return;
+        }
+
+        setIsBuyingNow(true);
+        try {
+            const response = await axiosInstance.post(
+                "/order/api/create-payment-session",
+                {
+                    cart: [{
+                        id: productDetails.id,
+                        quantity,
+                        selectedOptions: { color: isSelected, size: isSizeSelected },
+                    }],
+                    selectedAddressId: address.id,
+                    paymentMethod: "mpesa",
+                },
+                isProtected
+            );
+            router.push(`/checkout?sessionId=${encodeURIComponent(response.data.sessionId)}`);
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || "Could not start checkout. Please try again.");
+        } finally {
+            setIsBuyingNow(false);
         }
     };
 
@@ -281,7 +401,7 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
                                         <span className="px-4 bg-gray-100 py-1">{quantity}</span>
                                         <button
                                             className='px-3 cursor-pointer py-1 bg-gray-300 hover:bg-gray-400 text-black font-semibold rounded-r-md'
-                                            onClick={() => setQuantity((prev) => prev + 1)}
+                                            onClick={() => setQuantity((prev) => Math.min(productDetails?.stock || prev, prev + 1))}
                                         >
                                             +
                                         </button>
@@ -299,6 +419,30 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
                                         </span>
                                     )}
                                 </div>
+                                {user?.id && addresses.length > 0 && (
+                                    <label className="mt-4 block max-w-sm text-sm font-medium text-gray-700">
+                                        Deliver to
+                                        <select
+                                            value={selectedAddressId}
+                                            onChange={(event) => setSelectedAddressId(event.target.value)}
+                                            className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2"
+                                        >
+                                            {addresses.map((address) => (
+                                                <option key={address.id} value={address.id}>
+                                                    {address.label} - {address.city}, {address.country}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
+                                <button
+                                    type="button"
+                                    className="flex mt-3 items-center gap-2 rounded-lg border border-blue-600 px-5 py-[10px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={isBuyingNow || productDetails?.stock < quantity || productDetails?.stock <= 0}
+                                    onClick={handleBuyNow}
+                                >
+                                    {isBuyingNow ? "Preparing checkout..." : "Buy Now"}
+                                </button>
                                 <button
                                     className={`flex mt-6 items-center gap-2 px-5 py-[10px] bg-[#ff5722] hover:bg-[#e64a19] text-white font-medium rounded-lg transition ${isInCart ? "cursor-not-allowed" : "cursor-pointer"
                                         }`}
@@ -333,7 +477,11 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
                         <span className="text-sm text-gray-600">Delivery Options</span>
                         <div className='flex items-center text-gray-600 gap-1'>
                             <MapPin size={18} className='ml-[-5px]' />
-                            <span className="text-lg font-normal">{location?.city + ", " + location?.country}</span>
+                            <span className="text-lg font-normal">
+                                {location?.city && location?.country
+                                    ? `${location.city}, ${location.country}`
+                                    : "Location unavailable"}
+                            </span>
                         </div>
                     </div>
                     <div className='mb-1 px-3 pb-1 border-b border-b-gray-100'>
@@ -354,13 +502,18 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
                                             Sold by
                                         </span>
                                         <span className="block max-w-[150px] truncate font-medium text-lg">
-                                            {productDetails?.shop?.name}
+                                            {shop?.name}
                                         </span>
                                     </div>
-                                    <Link href={"#"} className="text-blue-500 text-sm flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={handleChat}
+                                        disabled={isChatLoading}
+                                        className="text-blue-500 text-sm flex items-center gap-1 cursor-pointer hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
                                         <MessageSquareText />
-                                        Chat Now
-                                    </Link>
+                                        {isChatLoading ? "Opening..." : "Chat Now"}
+                                    </button>
                                 </div>
                                 <div className='grid grid-cols-3 gap-2 border-t border-t-gray-200 mt-3 pt-3'>
                                     <div>
@@ -382,7 +535,7 @@ const ProductDetails = ({ productDetails }: { productDetails: any }) => {
                                 </div>
                                 <div className='text-center mt-4 border-t border-t-gray-200 pt-2'>
                                     <Link
-                                        href={`/shop/${productDetails?.shop?.id}`}
+                                        href={`/shop/${shop?.id}`}
                                         className="text-blue-500 font-medium text-sm hover:underline"
                                     >
                                         GO TO STORE

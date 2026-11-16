@@ -1,408 +1,8 @@
-import { NextFunction, Request, Response } from "express";
-import Stripe from "stripe";
-import { NotFoundError, ValidationError } from "@packages/error-handler"; 
-import { Prisma } from "@prisma/client";
+import { NextFunction, Response } from "express";
+import { NotFoundError, ValidationError } from "@packages/error-handler";
 import prisma from "@packages/libs/prisma";
-import Redis from "@packages/libs/redis";
-import crypto from "crypto"
-import { sendEmail } from "../utils/send-email";
+import { DELIVERY_STATUSES, DeliveryStatus, isDeliveryStatus } from "../utils/delivery-status";
 
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-const DELIVERY_STATUSES = ["Ordered", "Packed", "Shipped", "Out for Delivery", "Delivered"];
-
-// create payment intent
-
-export const createPaymentIntent = async (
-    req: any,
-    res: Response,
-    next: NextFunction
-) => {
-    const { amount, sellerStripeAccount, sessionId } = req.body;
-
-    const customerAmount = Math.round(amount * 100);
-    const platformFee = Math.floor(customerAmount * 0.1);
-
-    try {
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: customerAmount,
-            currency: "kes",
-            payment_method_types: ["card"],
-            application_fee_amount: platformFee,
-
-            transfer_data: {
-                destination: sellerStripeAccount,
-            },
-
-            metadata: {
-                sessionId,
-                userId: req.user.id,
-            },
-        });
-
-        res.send({
-            clientSecret: paymentIntent.client_secret,
-        });
-    } catch (error) {
-        next(error);
-    }
-};
-
-// create payment session
-export const createPaymentSession = async (
-    req: any,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const { cart, selectedAddressId, coupon } = req.body;
-        const userId = req.user.id;
-
-        if (!cart || !Array.isArray(cart) || cart.length === 0) {
-            return next(new ValidationError("Cart is empty or invalid."));
-        }
-
-        const normalizedCart = JSON.stringify(
-            cart.map((item: any) => ({
-                id: item.id,
-                quantity: item.quantity,
-                sale_price: item.sale_price,
-                shopId: item.shopId,
-                selectedOptions: item.selectedOptions || {},
-            })).sort((a: any, b: any) => a.id.localeCompare(b.id))
-        );
-
-        const keys = await Redis.keys("payment-session:*");
-        for (const key of keys){
-            const data = await Redis.get(key);
-            if(data){
-                const sessions = JSON.parse(data);
-                if(sessions.userId === userId){
-                    const existingCart = JSON.stringify(
-                        sessions.cart.map((item:any) => ({
-                            id: item.id,
-                            quantity: item.quantity,
-                            sale_price: item.sale_price,
-                            shopId: item.shopId,
-                            selectedOptions: item.selectedOptions || {},
-                        }))
-                        .sort((a: any, b: any) => a.id.localeCompare(b.id))
-                    );
-                    if (existingCart === normalizedCart) {
-                        return res.status(200).json({ sessionId: key.split(":")[1] });
-                    } else {
-                        await Redis.del(key);
-                    }
-                }
-            }
-        }
-
-        // fetching sellers and their stripe accounts
-        const uniqueShopIds = [...new Set(cart.map((item: any) => item.shopId))] as string[];
-
-        const shops = await prisma.shops.findMany({
-            where: {
-                id: {in: uniqueShopIds}
-            },
-            select: {
-                id: true,
-                sellerId: true,
-                seller: {
-                    select: {
-                        stripeId: true,
-                    },
-                },
-            },
-        });
-
-        const sellerData = shops.map((shop) => ({
-            shopId: shop.id,
-            sellerId: shop.sellerId,
-            stripeAccountId: shop.seller?.stripeId,
-        }))
-
-        // calculate total
-        const totalAmount = cart.reduce((total: number, item: any) => {
-            return total + item.quantity * item.sale_price;
-        }, 0);
-
-        // create session payload
-        const sessionId = crypto.randomUUID();
-
-        const sessionData = {
-            userId,
-            cart,
-            sellers: sellerData,
-            totalAmount,
-            shippingAddressId: selectedAddressId || null,
-            coupon: coupon || null,
-        };
-
-        await Redis.setex(
-            `payment-session:${sessionId}`,
-            600, //10 minutes
-            JSON.stringify(sessionData)
-        );
-
-        return res.status(201).json({ sessionId });
-
-    } catch (error) {
-        next(error);
-    }
-}
-
-// verify payment session
-export const verifyingPaymentSession = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const sessionId = req.query.sessionId as string;
-        if (!sessionId) {
-            return res.status(400).json({ error: "session ID is required."} );
-        }
-
-        // Fetch session from Redis
-        const sessionKey = `payment-session:${sessionId}`;
-        const sessionData = await Redis.get(sessionKey);
-
-        if (!sessionData) {
-            return res.status(404).json({ error: "Session not found or expired."});
-        }
-
-        // Parse amd return session
-        const session = JSON.parse(sessionData);
-
-        return res.status(200).json({
-            success: true,
-            session,
-        });
-    } catch (error) {
-        return next(error);
-
-    }
-
-};
-
-// create order
-export const createOrder = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const stripeSignature = req.headers["stripe-signature"];
-        if (!stripeSignature) {
-            return res.status(400).send("Missing Stripe signature")
-        }
-
-        const rawBody = (req as any).rawBody;
-
-        let event;
-        try {
-            event = stripe.webhooks.constructEvent(
-                rawBody,
-                stripeSignature,
-                process.env.STRIPE_WEBHOOK_SECRET!
-            );
-        } catch (err: any) {
-            console.error("webhook signature verification faiiled.", err.message);
-            return res.status(400).send(`webhook Error: ${err.message}`);
-        }
-
-        if (event.type === "payment_intent.succeeded") {
-            const paymentIntent = event.data.object as Stripe.PaymentIntent;
-            const sessionId = paymentIntent.metadata.sessionId;
-            const userId = paymentIntent.metadata.userId;
-
-            const sessionKey = `payment-session:${sessionId}`;
-            const sessionData = await Redis.get(sessionKey);
-
-            if (!sessionData) {
-                console.warn("Session data expired or missing for", sessionId);
-                return res.status(200).send("No session found, skipping order creation");
-            }
-        
-        const { cart, totalAmount, shippingAddressId, coupon } = 
-        JSON.parse(sessionData);
-
-        const user = await prisma.users.findUnique({ where: { id: userId }});
-        const name = user?.name!;
-        const email = user?.email!;
-
-        const shopGrouped = cart.reduce((acc: any, item: any) => {
-            if (!acc[item.shopId]) acc[item.shopId] = [];
-            acc[item.shopId].push(item);
-            return acc;
-        }, {});
-
-        for (const shopId in  shopGrouped) {
-            const orderItems = shopGrouped[shopId];
-
-            let orderTotal = orderItems.reduce(
-                (sum: number, p: any) => sum + p.quantity * p.sale_price,
-                0
-            );
-            // Apply discount if applicable
-            if (
-                coupon &&
-                coupon.discountedProductId &&
-                orderItems.some((item: any) => item.id === coupon.discountedProductId)
-            ) {
-                const discountedItem = orderItems.find(
-                    (items: any) => items.id === coupon.discountedProductId
-                );
-                if (discountedItem) {
-                    const discount =
-                    coupon.discountPercent > 0
-                    ? (discountedItem.sale_price * 
-                        discountedItem.quantity * 
-                        coupon.discountPercent) /
-                        100
-                        : coupon.discountAmount;
-
-                        orderTotal -= discount;
-                }
-            }
-            // Create order
-            await prisma.orders.create({
-                data: {
-                    userId,
-                    shopId,
-                    total: orderTotal,
-                    status: "paid",
-                    shippingAddressId: shippingAddressId || null,
-                    couponCode: coupon?.code || null,
-                    discountAmount: coupon?.discountAmount || 0,
-                    items: {
-                        create: orderItems.map((item: any) => ({
-                            productId: item.id,
-                            quantity: item.quantity,
-                            price: item.sale_price,
-                            selectedOptions: item.selectedOptions,
-                        })),
-                    }
-                }
-            });
-
-            // Update Product & analytics
-            for (const item of orderItems) {
-                const { id: productId, quantity} = item;
-
-                await prisma.products.update({
-                    where: { id: productId },
-                    data: {
-                        stock: { decrement: quantity },
-                        totalSales: { increment: quantity}
-                    },
-                });
-
-                await prisma.productAnalytics.upsert({
-                    where: { productId },
-                    create: {
-                        productId,
-                        shopId,
-                        purchases: quantity,
-                        lastViewedAt: new Date(),
-                    },
-                    update: {
-                        purchases: { increment: quantity },
-                    },
-                });
-
-                const existingAnalytics = await prisma.userAnalytics.findUnique({
-                    where: { userId },
-                });
-
-                const newAction = {
-                    productId,
-                    shopId,
-                    action: "purchase",
-                    timeStamp: Date.now(),
-                };
-
-                const currentActions = Array.isArray(existingAnalytics?.actions)
-                ? (existingAnalytics.actions as Prisma.JsonArray)
-                : [];
-
-                if (existingAnalytics) {
-                    await prisma.userAnalytics.update({
-                        where: { userId },
-                        data: {
-                            lastVisited: new Date(),
-                            actions: [...currentActions, newAction],
-                        },
-                    })
-                } else {
-                    await prisma.userAnalytics.create({
-                        data: {
-                            userId,
-                            lastVisited: new Date(),
-                            actions: [newAction],
-                        },
-                    });
-                }
-            }
-
-            // send email for user
-            await sendEmail(
-                email,
-                "Your Sokojamo Order Confirmtion",
-                "order-confirmation",
-                {
-                    name,
-                    cart,
-                    totalAmount: coupon?.discountAmount
-                    ? totalAmount - coupon?.discountAmount
-                    : totalAmount,
-
-                    trackingUrl: `https://jokojamo.com//order/${sessionId}`,
-                }
-            )
-
-                        // Notify the seller of this shop
-            const shop = await prisma.shops.findUnique({
-                where: { id: shopId },
-                select: { sellerId: true },
-            });
-
-            if (shop) {
-                const firstProduct = orderItems[0];
-                const productTitle = firstProduct?.title || "new item";
-
-                await prisma.notifications.create({
-                    data: {
-                        title: "New Order Received",
-                        message: `A customer just ordered ${productTitle} from your shop.`,
-                        userId,
-                        receiverId: shop.sellerId,
-                        redirect_link: `https://sokojamo.com/order/${sessionId}`,
-                    },
-                });
-            }
-        } // end of: for (const shopId in shopGrouped)
-
-        // Notify the admin (once per payment, not once per shop)
-        await prisma.notifications.create({
-            data: {
-                title: "Platform Order Alert",
-                message: `A new order was placed by ${name}.`,
-                userId,
-                receiverId: "admin",
-                redirect_link: `https://sokojamo.com/order/${sessionId}`,
-            },
-        });
-
-        await Redis.del(sessionKey);
-        }
-
-        res.status(200).json({ received: true });
-    } catch (error) {
-        next(error);
-    }
-};
 
 // get seller orders
 export const getSellerOrders = async (req: any, res: Response, next: NextFunction) => {
@@ -447,8 +47,8 @@ export const getOrderDetails = async (req: any, res: Response, next: NextFunctio
 
         const coupon = order.couponCode
             ? await prisma.discount_codes.findUnique({
-                  where: { discountCode: order.couponCode },
-              })
+                where: { discountCode: order.couponCode },
+            })
             : null;
 
         // fetch all product details in one go
@@ -481,24 +81,30 @@ export const getOrderDetails = async (req: any, res: Response, next: NextFunctio
     }
 };
 
-// update delivery status
 export const updateDeliveryStatus = async (req: any, res: Response, next: NextFunction) => {
     try {
         const { orderId } = req.params;
-        const { deliveryStatus } = req.body;
+        const { deliveryStatus } = req.body as { deliveryStatus?: unknown };
 
-        if (!deliveryStatus || !DELIVERY_STATUSES.includes(deliveryStatus)) {
+        if (!orderId || !deliveryStatus) {
+            return next(new ValidationError("Missing order ID or delivery status."));
+        }
+
+        if (!isDeliveryStatus(deliveryStatus)) {
             return next(new ValidationError("Invalid delivery status."));
         }
 
-        const order = await prisma.orders.findUnique({ where: { id: orderId } });
-        if (!order) {
-            return next(new NotFoundError("Order not found with the id!"));
+        const existingOrder = await prisma.orders.findUnique({
+            where: { id: orderId },
+        });
+
+        if (!existingOrder) {
+            return next(new NotFoundError("Order not found!"));
         }
 
         const updatedOrder = await prisma.orders.update({
             where: { id: orderId },
-            data: { deliveryStatus },
+            data: { deliveryStatus, updatedAt: new Date() },
         });
 
         res.status(200).json({ success: true, order: updatedOrder });
@@ -506,8 +112,67 @@ export const updateDeliveryStatus = async (req: any, res: Response, next: NextFu
         next(error);
     }
 };
+
+export const adminUpdateDeliveryStatus = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const { orderId } = req.params;
+        const { deliveryStatus } = req.body as { deliveryStatus?: unknown };
+        if (!orderId || !isDeliveryStatus(deliveryStatus) || deliveryStatus === "cancelled") {
+            return next(new ValidationError("Choose a valid fulfillment status. Payment status cannot be changed here."));
+        }
+
+        const order = await prisma.orders.findUnique({
+            where: { id: orderId },
+            include: { shop: { select: { sellerId: true, name: true } } },
+        });
+        if (!order) return next(new NotFoundError("Order not found."));
+        if (order.status.toLowerCase() !== "paid") {
+            return next(new ValidationError("Only confirmed paid orders can be moved through fulfillment."));
+        }
+        if (order.deliveryStatus === "cancelled") {
+            return next(new ValidationError("Cancelled orders cannot be reopened through fulfillment controls."));
+        }
+        const currentIndex = DELIVERY_STATUSES.indexOf(order.deliveryStatus as DeliveryStatus);
+        const nextIndex = DELIVERY_STATUSES.indexOf(deliveryStatus);
+        if (currentIndex >= 0 && nextIndex < currentIndex) {
+            return next(new ValidationError("Fulfillment can only move forward. Contact support for a correction."));
+        }
+
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+            const updated = await tx.orders.update({
+                where: { id: order.id },
+                data: { deliveryStatus, updatedAt: new Date() },
+            });
+            const label = deliveryStatus.replaceAll("_", " ");
+            await tx.notifications.createMany({
+                data: [
+                    {
+                        userId: order.userId,
+                        receiverId: order.userId,
+                        title: "Order progress updated",
+                        message: `Order #${order.id.slice(-8).toUpperCase()} is now ${label}.`,
+                        redirect_link: `/profile?active=Orders`,
+                    },
+                    {
+                        userId: order.userId,
+                        receiverId: order.shop.sellerId,
+                        title: "Order updated by admin",
+                        message: `An administrator updated order #${order.id.slice(-8).toUpperCase()} to ${label}.`,
+                        redirect_link: "/dashboard/orders",
+                    },
+                ],
+            });
+            return updated;
+        });
+        return res.status(200).json({ success: true, order: updatedOrder });
+    } catch (error) {
+        return next(error);
+    }
+};
+
 export const getDashboardStats = async (req: any, res: Response, next: NextFunction) => {
     try {
+        // Find the shop associated with the logged-in seller
         const shop = await prisma.shops.findUnique({
             where: { sellerId: req.seller.id },
         });
@@ -538,6 +203,8 @@ export const getDashboardStats = async (req: any, res: Response, next: NextFunct
         const revenueByMonth: Record<string, number> = {};
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+        // Initialize last 6 months with 0 (setDate(1) avoids month-end rollover,
+        // e.g. subtracting a month from Oct 31 landing on "Oct 1" instead of Sep)
         for (let i = 5; i >= 0; i--) {
             const d = new Date();
             d.setDate(1);
@@ -557,23 +224,9 @@ export const getDashboardStats = async (req: any, res: Response, next: NextFunct
             revenue: revenueByMonth[month],
         }));
 
-        // 2. Device Usage (static for now)
-        const deviceUsage = [
-            { name: "Phone", value: 65, color: "#10b981" },
-            { name: "Tablet", value: 15, color: "#f59e0b" },
-            { name: "Computer", value: 20, color: "#3b82f6" },
-        ];
-
-        // 3. Visitors Distribution (static for now)
-        const visitorsDistribution = [
-            { country: "USA", visitors: 450, color: "#3b82f6" },
-            { country: "India", visitors: 300, color: "#10b981" },
-            { country: "UK", visitors: 200, color: "#3b82f6" },
-            { country: "Kenya", visitors: 150, color: "#10b981" },
-        ];
-
-        // 4. Recent Orders + real total order count
-        const [recentOrders, totalOrders] = await Promise.all([
+        // Analytics are recorded per user; count only users whose tracked actions
+        // include a product view from this shop.
+        const [recentOrders, totalOrders, allPaidOrders, shopVisitors, productStats] = await Promise.all([
             prisma.orders.findMany({
                 where: { shopId },
                 take: 5,
@@ -583,7 +236,42 @@ export const getDashboardStats = async (req: any, res: Response, next: NextFunct
                 },
             }),
             prisma.orders.count({ where: { shopId } }),
+            prisma.orders.findMany({
+                where: { shopId, status: "paid" },
+                select: { total: true },
+            }),
+            prisma.uniqueShopVisitors.findMany({ where: { shopId }, select: { userId: true } }),
+            prisma.productAnalytics.aggregate({
+                where: { shopId },
+                _sum: { views: true, purchases: true },
+            }),
         ]);
+        const analytics = shopVisitors.length
+            ? await prisma.userAnalytics.findMany({
+                where: { userId: { in: shopVisitors.map((visitor: { userId: string }) => visitor.userId) } },
+                select: { country: true, device: true },
+            })
+            : [];
+        const visitors = analytics;
+        const deviceCounts = new Map<string, number>();
+        const countryCounts = new Map<string, number>();
+        visitors.forEach((visitor: any) => {
+            const device = visitor.device || "Unknown";
+            const country = visitor.country || "Unknown";
+            deviceCounts.set(device, (deviceCounts.get(device) ?? 0) + 1);
+            countryCounts.set(country, (countryCounts.get(country) ?? 0) + 1);
+        });
+        const colors = ["#10b981", "#f59e0b", "#3b82f6", "#a855f7", "#06b6d4"];
+        const deviceUsage = Array.from(deviceCounts, ([name, value], index) => ({
+            name,
+            value,
+            color: colors[index % colors.length],
+        }));
+        const visitorsDistribution = Array.from(countryCounts, ([country, visitors], index) => ({
+            country,
+            visitors,
+            color: colors[index % colors.length],
+        })).sort((a, b) => b.visitors - a.visitors).slice(0, 6);
 
         const formattedRecentOrders = recentOrders.map(
             (order: {
@@ -607,13 +295,164 @@ export const getDashboardStats = async (req: any, res: Response, next: NextFunct
                 visitorsDistribution,
                 recentOrders: formattedRecentOrders,
                 totalOrders,
-                totalRevenue: orders.reduce(
+                totalRevenue: allPaidOrders.reduce(
                     (sum: number, order: { total: number }) => sum + order.total,
                     0
                 ),
+                totalVisitors: visitors.length,
+                conversionRate: productStats._sum.views
+                    ? ((productStats._sum.purchases ?? 0) / productStats._sum.views) * 100
+                    : 0,
             },
         });
     } catch (error) {
         next(error);
     }
 };
+
+// verify coupon code
+export const verifyCouponCode = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const { couponCode, cart } = req.body;
+
+        if (!couponCode || !cart || cart.length === 0) {
+            return next(new ValidationError("Coupon code and cart are required!"));
+        }
+
+        // Fetch the discount code
+        const discount = await prisma.discount_codes.findUnique({
+            where: { discountCode: couponCode },
+        });
+
+        if (!discount) {
+            return next(new ValidationError("Coupon code isn't valid!"));
+        }
+
+        // Find matching product that includes this discount code
+        const matchingProduct = cart.find((item: any) =>
+            item.discount_codes?.some((d: any) => d === discount.id)
+        );
+
+        let discountAmount = 0;
+        const price = matchingProduct.sale_price * matchingProduct.quantity;
+
+        if (discount.discountType === "percentage") {
+            discountAmount = (price * discount.discountValue) / 100;
+        } else if (discount.discountType === "flat") {
+            discountAmount = discount.discountValue;
+        }
+
+        // Prevent discount from being greater than total price
+        discountAmount = Math.min(discountAmount, price);
+
+        res.status(200).json({
+            valid: true,
+            discount: discount.discountValue,
+            discountAmount: discountAmount.toFixed(2),
+            discountedProductId: matchingProduct.id,
+            discountType: discount.discountType,
+            message: "Discount applied to 1 eligible product",
+        });
+
+    } catch (error) {
+        next(error);
+
+    }
+}
+
+type ProductSummary = {
+    id: string;
+    title: string;
+    images: { url: string }[];
+};
+
+// get user orders
+export const getUserOrders = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const orders = await prisma.orders.findMany({
+            where: { userId: req.user.id },
+            include: {
+                items: true,
+                shop: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        // orderItems has no relation to products, so enrich in one batched query
+        const productIds: string[] = [
+            ...new Set<string>(
+                orders.flatMap((o: any) => o.items.map((i: any) => i.productId as string))
+            ),
+        ];
+
+        const products: ProductSummary[] = productIds.length
+            ? await prisma.products.findMany({
+                where: { id: { in: productIds } },
+                select: {
+                    id: true,
+                    title: true,
+                    images: { select: { url: true }, take: 1 },
+                },
+            })
+            : [];
+
+        const productMap = new Map<string, ProductSummary>(
+            products.map((p: ProductSummary): [string, ProductSummary] => [p.id, p])
+        );
+
+        res.status(200).json({
+            success: true,
+            orders: orders.map((order: any) => ({
+                ...order,
+                items: order.items.map((item: any) => ({
+                    ...item,
+                    product: productMap.get(item.productId) ?? null,
+                })),
+            })),
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// get admin orders
+export const getAdminOrders = async(req: any, res:Response, next:NextFunction) => {
+    try {
+        const page = Math.max(Number.parseInt(String(req.query.page ?? "1"), 10) || 1, 1);
+        const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? "25"), 10) || 25, 1), 100);
+        // Fetch all orders
+        const [orders, totalOrders] = await Promise.all([
+            prisma.orders.findMany({
+            skip: (page - 1) * limit,
+            take: limit,
+            include: {
+                user: { select: { id: true, name: true, email: true, avatar: true } },
+                shop: { select: { id: true, name: true, sellerId: true, seller: { select: { id: true, name: true, email: true } } } },
+                items: true,
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+            }),
+            prisma.orders.count(),
+        ]);
+        const productIds = [...new Set(orders.flatMap((order) => order.items.map((item) => item.productId)))];
+        const products = productIds.length
+            ? await prisma.products.findMany({
+                where: { id: { in: productIds } },
+                select: { id: true, title: true, slug: true, sale_price: true, images: { select: { url: true }, take: 1 } },
+            })
+            : [];
+        const productById = new Map(products.map((product) => [product.id, product]));
+        return res.status(200).json({
+            success: true,
+            orders: orders.map((order) => ({
+                ...order,
+                items: order.items.map((item) => ({ ...item, product: productById.get(item.productId) ?? null })),
+            })),
+            meta: { page, limit, total: totalOrders, totalPages: Math.ceil(totalOrders / limit) },
+        });
+    } catch (error) {
+        return next(error);
+    }
+}

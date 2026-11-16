@@ -8,7 +8,9 @@ import HeartIcon from '../../../assets/svgs/heart-icon';
 import CartIcon from '../../../assets/svgs/cart-icon';
 import useUser from 'apps/user-ui/src/hooks/useUser';
 import { useStore } from 'apps/user-ui/src/store';
-
+import { Bell } from 'lucide-react';
+import useUnreadNotificationCount from 'apps/user-ui/src/hooks/useUnreadNotificationCount';
+import NotificationBadge from 'apps/user-ui/src/shared/components/notification-badge';
 
 const departments = [
   'Electronics',
@@ -29,13 +31,11 @@ const HeaderBottom = () => {
   const cart = useStore((state: any) => state.cart);
   const deptsRef = useRef<HTMLDivElement>(null);
   const { user, isloading } = useUser();
+  const unreadNotificationCount = useUnreadNotificationCount(!!user);
 
-
-
-  // Filter out the "Become A Seller" item to handle it separately in the "ml-auto" section
-  // while keeping the rest in the main nav group
-  const mainNavLinks = navItems.filter(item => item.href !== '/become-a-seller');
-  const sellerLink = navItems.find(item => item.href === '/become-a-seller');
+  // External items (Become A Seller) are rendered separately on the right
+  const mainNavLinks = navItems.filter((item) => !item.external);
+  const sellerLink = navItems.find((item) => item.external);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -108,8 +108,8 @@ const HeaderBottom = () => {
                 href={item.href}
                 onClick={() => setActiveLink(item.href)}
                 className={`px-4 py-3 text-sm font-medium transition-colors duration-150 border-b-2 ${activeLink === item.href
-                    ? 'text-blue-600 border-blue-600'
-                    : 'text-gray-700 border-transparent hover:text-blue-600'
+                  ? 'text-blue-600 border-blue-600'
+                  : 'text-gray-700 border-transparent hover:text-blue-600'
                   }`}
               >
                 {item.title}
@@ -136,6 +136,17 @@ const HeaderBottom = () => {
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{cart?.length}</span>
                 </Link>
 
+                {user && (
+                  <Link
+                    href="/profile?active=Notifications"
+                    className="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100"
+                    aria-label={unreadNotificationCount ? `Notifications, ${unreadNotificationCount} unread` : 'Notifications'}
+                  >
+                    <Bell className="w-5 h-5 text-gray-600" />
+                    <NotificationBadge count={unreadNotificationCount} />
+                  </Link>
+                )}
+
                 {/* Profile */}
                 {!isloading && user ? (
                   <Link href="/profile" className="flex items-center gap-2 group pl-1" aria-label="Go to profile">
@@ -159,17 +170,19 @@ const HeaderBottom = () => {
               </div>
             )}
 
-            {/* Become a Seller link from constants */}
+            {/* Become a Seller – opens seller signup in a new tab */}
             {sellerLink && (
-              <Link
+              <a
                 href={sellerLink.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mr-4 flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors py-3"
               >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" d="M12 5v14M5 12h14" />
                 </svg>
                 {sellerLink.title}
-              </Link>
+              </a>
             )}
           </div>
         </div>

@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import axiosInstance from "apps/seller-ui/src/utils/axiosInstance";
 import { useParams, useRouter } from "next/navigation";
 
+
 const statuses = [
     "Ordered",
     "Packed",

@@ -33,6 +33,34 @@ npx nx show project auth-service
 
 These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
 
+## IntaSend payments and wallet payouts
+
+The order service uses IntaSend M-Pesa STK Push for customer checkout and wallet top-ups. Configure these server-side environment variables for the order service:
+
+```text
+INTASEND_SECRET_KEY=<sandbox-or-live-secret-key>
+INTASEND_WEBHOOK_CHALLENGE=<the-same-challenge-configured-in-IntaSend>
+```
+
+In the IntaSend dashboard, configure an HTTPS webhook at
+`https://<public-api-host>/order/api/intasend/webhook` and subscribe to
+`collection_event` and `send_money_event`. The webhook challenge must exactly
+match `INTASEND_WEBHOOK_CHALLENGE`. Use sandbox keys for testing; IntaSend uses
+the same API base URL for sandbox and live, with the key selecting the environment.
+
+Customer payments and top-ups settle into the platform's IntaSend wallet. The
+application maintains separate KES wallet ledgers: customer top-ups become
+spendable after payment confirmation; seller earnings are credited after
+payment confirmation and become withdrawable after IntaSend reports funds as
+`AVAILABLE`. The existing 10% platform fee is retained. Seller withdrawal
+requests are held from the available ledger balance until an admin rejects or
+approves them for an IntaSend `MPESA-B2C` payout. Ensure the IntaSend account has
+disbursements enabled and sufficient available KES before approving payouts.
+Before running the updated services against a database, apply the new MongoDB
+collections and unique indexes with `npx prisma db push --schema prisma/schema.prisma`.
+Wallet balance updates and payment settlement use Prisma transactions, so the
+MongoDB deployment must support replica-set transactions.
+
 [More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
 ## Add new projects

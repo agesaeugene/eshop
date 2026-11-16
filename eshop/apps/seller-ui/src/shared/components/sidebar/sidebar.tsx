@@ -10,7 +10,7 @@ import Logo from 'apps/seller-ui/src/assets/svgs/logo';
 import SidebarItem from './sidebar.item';
 import Home from 'apps/seller-ui/src/assets/icons/home';
 import SidebarMenu from './sidebar.menu';
-import { BellPlus, BellRing, CalendarPlus, ListOrdered, LogOut, Mail, PackageSearch, Settings, SquarePlus, TicketPercent, TicketPercentIcon } from 'lucide-react';
+import { BadgePercent, BellPlus, BellRing, CalendarPlus, ListOrdered, LogOut, Mail, PackageSearch, Settings, SquarePlus, Star, TicketPercent, TicketPercentIcon, Wallet } from 'lucide-react';
 import Payment from 'apps/seller-ui/src/assets/icons/payment';
 
 
@@ -104,6 +104,12 @@ const SidebarBarWrapper = () => {
 
 
                             />
+                            <SidebarItem
+                                isActive={activeSidebar === "/dashboard/wallet"}
+                                title="Wallet"
+                                href="/dashboard/wallet"
+                                icon={<Wallet size={26} color={getIconColor("/dashboard/wallet")} />}
+                            />
 
                         </SidebarMenu>
                         <SidebarMenu title="Products">
@@ -126,6 +132,18 @@ const SidebarBarWrapper = () => {
                                 }
 
 
+                            />
+                            <SidebarItem
+                                isActive={activeSidebar === "/dashboard/offers"}
+                                title="Offers"
+                                href="/dashboard/offers"
+                                icon={<BadgePercent size={24} color={getIconColor("/dashboard/offers")} />}
+                            />
+                            <SidebarItem
+                                isActive={activeSidebar === "/dashboard/reviews"}
+                                title="Reviews"
+                                href="/dashboard/reviews"
+                                icon={<Star size={24} color={getIconColor("/dashboard/reviews")} />}
                             />
 
                         </SidebarMenu>
@@ -202,7 +220,7 @@ const SidebarBarWrapper = () => {
                             <SidebarItem
                                 isActive={activeSidebar === "/dashboard/logout"}
                                 title="Logout"
-                                href="/"
+                                href="/dashboard/logout"
                                 icon={
                                     <LogOut size={26} color={getIconColor("/")} />
                                 }

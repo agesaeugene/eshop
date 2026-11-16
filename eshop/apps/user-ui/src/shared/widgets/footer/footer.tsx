@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import React from "react";
 
 const accountLinks = [
@@ -52,6 +53,10 @@ const socials = [
 ];
 
 const Footer = () => {
+  const pathname = usePathname();
+
+  if (pathname === "/inbox") return null;
+
   return (
     <footer className="w-full bg-[#f1f3f4] border-t border-slate-200">
       <div className="w-[90%] lg:w-[80%] mx-auto py-14">

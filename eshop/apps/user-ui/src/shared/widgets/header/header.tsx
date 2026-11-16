@@ -7,7 +7,11 @@ import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import HeaderBottom from './header-bottom';
 import useUser from 'apps/user-ui/src/hooks/useUser';
-import { useStore } from 'apps/user-ui/src/store';
+import { useStore, setActiveStoreUser } from 'apps/user-ui/src/store';
+import { Bell } from 'lucide-react';
+import useUnreadNotificationCount from 'apps/user-ui/src/hooks/useUnreadNotificationCount';
+import NotificationBadge from 'apps/user-ui/src/shared/components/notification-badge';
+import { SELLER_SIGNUP_URL } from '../../../configs/constants';
 
 const Header = () => {
   const [searchValue, setSearchValue] = useState('');
@@ -17,7 +21,11 @@ const Header = () => {
   const { user, isloading } = useUser();
   const wishlist = useStore((state: any) => state.wishlist);
   const cart = useStore((state: any) => state.cart);
+  const unreadNotificationCount = useUnreadNotificationCount(!!user);
 
+  useEffect(() => {
+    if (!isloading) setActiveStoreUser(user?.id ?? null);
+  }, [isloading, user?.id]);
 
   /* Lock body scroll when mobile drawer is open */
   useEffect(() => {
@@ -103,10 +111,26 @@ const Header = () => {
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold leading-none">{cart?.length}</span>
           </Link>
 
-          {/* Sell (desktop only) */}
-          <Link href="/sell" className="hidden md:inline-block text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap">
+          {user && (
+            <Link
+              href="/profile?active=Notifications"
+              className="relative flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100"
+              aria-label={unreadNotificationCount ? `Notifications, ${unreadNotificationCount} unread` : 'Notifications'}
+            >
+              <Bell className="w-5 h-5 text-gray-600" />
+              <NotificationBadge count={unreadNotificationCount} />
+            </Link>
+          )}
+
+          {/* Sell (desktop only) – opens seller signup in a new tab */}
+          <a
+            href={SELLER_SIGNUP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden md:inline-block text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap"
+          >
             Sell on SokoJamo
-          </Link>
+          </a>
 
           {/* Profile */}
           {!isloading && user ? (
@@ -201,11 +225,7 @@ const Header = () => {
               strokeWidth="2"
               className="w-5 h-5"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 6l12 12M18 6L6 18"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
         </div>
@@ -237,11 +257,7 @@ const Header = () => {
             strokeWidth="1.8"
             className="w-4 h-4 ml-auto text-gray-400"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 18l6-6-6-6"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
           </svg>
         </Link>
 
@@ -253,33 +269,37 @@ const Header = () => {
               ["Today's Deals", "/deals"],
               ["Best Sellers", "/bestsellers"],
               ["Wishlist", "/wishlist"],
-              ["Sell on SokoJamo", "/sell"],
+              ["Sell on SokoJamo", SELLER_SIGNUP_URL],
               ["Customer Service", "/customer-service"],
-            ].map(([label, href]) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center justify-between py-3.5 text-sm font-medium text-gray-800 border-b border-gray-100 hover:text-blue-600 transition-colors"
-              >
-                {label}
-
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  className="w-4 h-4 text-gray-400"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 18l6-6-6-6"
-                  />
+            ].map(([label, href]) => {
+              const isExternal = href === SELLER_SIGNUP_URL;
+              const classes =
+                "flex items-center justify-between py-3.5 text-sm font-medium text-gray-800 border-b border-gray-100 hover:text-blue-600 transition-colors";
+              const chevron = (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-4 h-4 text-gray-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
                 </svg>
-              </Link>
-            ))}
+              );
+
+              return isExternal ? (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={classes}
+                >
+                  {label}
+                  {chevron}
+                </a>
+              ) : (
+                <Link key={href} href={href} onClick={() => setIsMobileMenuOpen(false)} className={classes}>
+                  {label}
+                  {chevron}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Categories */}
@@ -314,11 +334,7 @@ const Header = () => {
                     strokeWidth="1.7"
                     className="w-4 h-4 text-gray-400"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 18l6-6-6-6"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
                   </svg>
                 </button>
               ))}

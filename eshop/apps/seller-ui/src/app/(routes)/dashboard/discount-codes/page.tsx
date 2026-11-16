@@ -7,7 +7,7 @@ import Link from 'next/link';
 import toast from "react-hot-toast";
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import Input from 'packages/compoonents/input';
+import Input from 'packages/components/Input';
 import { AxiosError } from 'axios';
 import DeleteDiscountCodeModal from 'apps/seller-ui/src/shared/components/modals/delete.discount-codes';
 
