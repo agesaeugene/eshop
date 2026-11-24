@@ -180,6 +180,7 @@ model orders {
   shopId          String       @db.ObjectId
   shop            shops        @relation(fields: [shopId], references: [id])
   total           Float
+  deliveryFee     Float        @default(0)
   shippingAddressId String?
   couponCode      String?
   discountAmount  Float?
@@ -234,6 +235,7 @@ model paymentSessions {
   paymentMethod     String   @default("mpesa")
   cart              Json
   totalAmount       Float
+  deliveryFee       Float    @default(0)
   paymentAmountMinor Int
   currency          String   @default("KES")
   shippingAddressId String?

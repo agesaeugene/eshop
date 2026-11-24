@@ -7,12 +7,14 @@ import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { Range } from "react-range";
 import ProductCard from "apps/user-ui/src/shared/components/cards/product-card";
+import useRequireAuth from "apps/user-ui/src/hooks/useRequiredAuth";
 
 const MIN = 0;
 const MAX = 1199;
 
 const Page = () => {
   const router = useRouter();
+  const { user, isloading: isUserLoading } = useRequireAuth();
 
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 1199]);
@@ -49,6 +51,7 @@ const Page = () => {
   };
 
   const fetchFilteredProducts = async () => {
+    if (!user) return;
     setIsProductLoading(true);
 
     try {
@@ -80,9 +83,10 @@ const Page = () => {
   };
 
   useEffect(() => {
+    if (isUserLoading || !user) return;
     updateURL();
     fetchFilteredProducts();
-  }, [priceRange, selectedCategories, selectedColors, selectedSizes, page]);
+  }, [priceRange, selectedCategories, selectedColors, selectedSizes, page, user, isUserLoading]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["categories"],
@@ -91,6 +95,7 @@ const Page = () => {
       return res.data;
     },
     staleTime: 1000 * 60 * 30,
+    enabled: !!user,
   });
 
   const toggleCategory = (label: string) => {
@@ -112,6 +117,10 @@ const Page = () => {
       prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
     );
   };
+
+  if (isUserLoading || !user) {
+    return <div className="flex min-h-[50vh] items-center justify-center">Checking your account...</div>;
+  }
 
   return (
     <div className="w-full bg-[#f5f5f5] pb-10">

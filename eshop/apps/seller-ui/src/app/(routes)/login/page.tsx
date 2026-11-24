@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import React from 'react'
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff } from 'lucide-react';
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import type { AxiosError } from "axios";
 
@@ -19,6 +19,7 @@ const Login = () => {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [rememberMe, setRememberMe] = React.useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -31,8 +32,9 @@ const Login = () => {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URI}/api/login-seller`, data, { withCredentials: true });
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: async () => {
       setServerError(null);
+      await queryClient.invalidateQueries({ queryKey: ["seller"] });
       router.push("/");
     },
     onError: (error: AxiosError) => {

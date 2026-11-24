@@ -64,7 +64,7 @@ const Page = () => {
             console.error("Logout request failed:", error);
         } finally {
             // clear this user's cached data so the next login never sees it
-            queryClient.setQueryData(["user"], null);
+            queryClient.setQueryData(["User"], null);
             queryClient.removeQueries({ queryKey: USER_ORDERS_KEY });
             queryClient.removeQueries({ queryKey: USER_NOTIFICATIONS_KEY });
             // empty the in-memory cart/wishlist (the saved copy stays under this user's id)

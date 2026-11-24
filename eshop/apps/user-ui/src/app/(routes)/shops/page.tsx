@@ -8,9 +8,11 @@ import axiosInstance from "apps/user-ui/src/utils/axiosInstance";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
+import useRequireAuth from "apps/user-ui/src/hooks/useRequiredAuth";
 
 const Page = () => {
   const router = useRouter();
+  const { user, isloading: isUserLoading } = useRequireAuth();
 
   const [isShopLoading, setIsShopLoading] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -32,6 +34,7 @@ const Page = () => {
   };
 
   const fetchFilteredShops = async () => {
+    if (!user) return;
     setIsShopLoading(true);
 
     try {
@@ -59,9 +62,10 @@ const Page = () => {
   };
 
   useEffect(() => {
+    if (isUserLoading || !user) return;
     updateURL();
     fetchFilteredShops();
-  }, [selectedCategories, selectedCountries, page]);
+  }, [selectedCategories, selectedCountries, page, user, isUserLoading]);
 
   const toggleCategory = (label: string) => {
     setSelectedCategories((prev) =>
@@ -78,6 +82,10 @@ const Page = () => {
         : [...prev, code]
     );
   };
+
+  if (isUserLoading || !user) {
+    return <div className="flex min-h-[50vh] items-center justify-center">Checking your account...</div>;
+  }
 
   return (
     <div className="w-full bg-[#f5f5f5] pb-10">

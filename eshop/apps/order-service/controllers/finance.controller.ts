@@ -2,6 +2,7 @@ import { AppError, NotFoundError, ValidationError } from "@packages/error-handle
 import prisma from "@packages/libs/prisma";
 import { NextFunction, Response } from "express";
 import crypto from "crypto";
+import { DELIVERY_FEE_KES } from "@packages/utils/commerce";
 
 const INTASEND_API = "https://api.intasend.com/api/v1";
 const PLATFORM_FEE_PERCENT = 10;
@@ -136,11 +137,12 @@ export const createPaymentSession = async (req: any, res: Response, next: NextFu
         if (!address) return next(new ValidationError("Select one of your saved delivery addresses."));
         const resolved = await resolveCart(cart, coupon?.code);
         if (resolved.totalAmount <= 0) return next(new ValidationError("The order total must be greater than zero."));
+        const totalAmount = Math.round((resolved.totalAmount + DELIVERY_FEE_KES) * 100) / 100;
         const sessionId = crypto.randomUUID();
         const apiRef = `order-${sessionId}`;
         const paymentAmountMinor = paymentMethod === "mpesa"
-            ? Math.ceil(resolved.totalAmount) * 100
-            : Math.round(resolved.totalAmount * 100);
+            ? Math.ceil(totalAmount) * 100
+            : Math.round(totalAmount * 100);
         if (!Number.isSafeInteger(paymentAmountMinor) || paymentAmountMinor > 2_147_483_647) {
             return next(new ValidationError("The checkout total exceeds the supported KES payment limit."));
         }
@@ -153,7 +155,8 @@ export const createPaymentSession = async (req: any, res: Response, next: NextFu
                 status: "pending",
                 paymentMethod,
                 cart: resolved.cart,
-                totalAmount: resolved.totalAmount,
+                totalAmount,
+                deliveryFee: DELIVERY_FEE_KES,
                 paymentAmountMinor,
                 shippingAddressId: selectedAddressId || null,
                 coupon: resolved.coupon ?? undefined,
@@ -163,6 +166,7 @@ export const createPaymentSession = async (req: any, res: Response, next: NextFu
             success: true,
             sessionId: session.sessionId,
             totalAmount: session.totalAmount,
+            deliveryFee: session.deliveryFee,
             paymentAmount: session.paymentAmountMinor / 100,
             paymentMethod: session.paymentMethod,
         });
@@ -217,6 +221,7 @@ export const getCheckoutSession = async (req: any, res: Response, next: NextFunc
                 paymentMethod: session.paymentMethod,
                 cart: session.cart,
                 totalAmount: session.totalAmount,
+                deliveryFee: session.deliveryFee,
                 paymentAmount: session.paymentAmountMinor / 100,
                 coupon: session.coupon,
             },
@@ -236,18 +241,38 @@ const createOrdersAndCreditSellers = async (tx: any, session: any) => {
         (result[item.shopId] ??= []).push(item);
         return result;
     }, {});
-    for (const [shopId, items] of Object.entries(grouped) as [string, any[]][]) {
+    const shopEntries = Object.entries(grouped) as [string, any[]][];
+    const coupon = session.coupon as any;
+    const totalGoodsAfterDiscount = shopEntries.reduce((sum, [, items]) => {
+        const shopSubtotal = items.reduce((itemTotal, item) => itemTotal + item.sale_price * item.quantity, 0);
+        const shopDiscount = coupon?.discountedProductId
+            ? items.reduce((discountTotal, item) => discountTotal + (item.id === coupon.discountedProductId ? coupon.discountAmount : 0), 0)
+            : 0;
+        return sum + Math.max(0, shopSubtotal - shopDiscount);
+    }, 0);
+    let deliveryFeeMinorRemaining = Math.round(Number(session.deliveryFee ?? 0) * 100);
+    for (const [index, [shopId, items]] of shopEntries.entries()) {
         const shopTotal = items.reduce((sum, item) => sum + item.sale_price * item.quantity, 0);
-        const coupon = session.coupon as any;
         const appliedDiscount = coupon?.discountedProductId
             ? items.reduce((sum, item) => sum + (item.id === coupon.discountedProductId ? coupon.discountAmount : 0), 0)
             : 0;
-        const orderTotal = Math.max(0, shopTotal - appliedDiscount);
+        const goodsTotal = Math.max(0, shopTotal - appliedDiscount);
+        const isLastShop = index === shopEntries.length - 1;
+        const deliveryFeeMinor = isLastShop || totalGoodsAfterDiscount <= 0
+            ? deliveryFeeMinorRemaining
+            : Math.min(
+                deliveryFeeMinorRemaining,
+                Math.round(Number(session.deliveryFee ?? 0) * 100 * goodsTotal / totalGoodsAfterDiscount)
+            );
+        deliveryFeeMinorRemaining -= deliveryFeeMinor;
+        const deliveryFee = deliveryFeeMinor / 100;
+        const orderTotal = goodsTotal + deliveryFee;
         const order = await tx.orders.create({
             data: {
                 userId: session.userId,
                 shopId,
                 total: orderTotal,
+                deliveryFee,
                 status: "paid",
                 paymentMethod: session.paymentMethod,
                 paymentReference: session.apiRef,
@@ -266,7 +291,12 @@ const createOrdersAndCreditSellers = async (tx: any, session: any) => {
         });
         for (const item of items) {
             const updated = await tx.products.updateMany({
-                where: { id: item.id, stock: { gte: item.quantity }, isDeleted: false },
+                where: {
+                    id: item.id,
+                    stock: { gte: item.quantity },
+                    isDeleted: false,
+                    status: "Active",
+                },
                 data: { stock: { decrement: item.quantity }, totalSales: { increment: item.quantity } },
             });
             if (!updated.count) throw new ValidationError(`${item.title} ran out of stock during checkout.`);

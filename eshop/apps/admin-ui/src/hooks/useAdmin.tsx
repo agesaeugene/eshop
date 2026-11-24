@@ -29,18 +29,6 @@ const useAdmin = () => {
   const router = useRouter();
 
   useEffect(() => {
-    if (!admin?.id) return;
-    const heartbeat = () => {
-      void axiosInstance.post("/api/admin/session-heartbeat").catch((heartbeatError) => {
-        console.error("Could not update admin activity status:", heartbeatError);
-      });
-    };
-    heartbeat();
-    const interval = window.setInterval(heartbeat, 30_000);
-    return () => window.clearInterval(interval);
-  }, [admin?.id]);
-
-  useEffect(() => {
     if (isLoading) return;
 
     const status = (error as AxiosError | null)?.response?.status;

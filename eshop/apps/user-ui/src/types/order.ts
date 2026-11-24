@@ -9,6 +9,7 @@ export type OrderItem = {
 export type Order = {
     id: string;
     total: number;
+    deliveryFee?: number;
     status: string;
     deliveryStatus: string;
     createdAt: string;

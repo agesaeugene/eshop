@@ -50,7 +50,8 @@ app.set('trust proxy', 1);
 //rate limitter implementation
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: (req: any) => (req.user ? 1000 : 100), // limit each IP to 100 requests per windowMs
+  max: (req: any) =>
+    req.method === "GET" && req.path.startsWith("/product/api/") ? 1000 : 100,
   message: { error: 'Too many requests, please try again later!' },
   standardHeaders: true,
   legacyHeaders: true,

@@ -38,7 +38,7 @@ const Login = () => {
     },
     onSuccess: async () => {
       setServerError(null);
-      queryClient.invalidateQueries({ queryKey: ["user"] });
+      queryClient.invalidateQueries({ queryKey: ["User"] });
       router.push("/");
     },
     onError: (error: AxiosError) => {

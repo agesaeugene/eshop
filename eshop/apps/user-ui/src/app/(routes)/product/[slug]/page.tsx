@@ -1,40 +1,11 @@
-import ProductDetails from 'apps/user-ui/src/shared/modules/product/product-details';
-import axiosInstance from 'apps/user-ui/src/utils/axiosInstance';
-import { Metadata } from 'next';
+import ProductPageClient from './product-page-client';
+import type { Metadata } from 'next';
 import React from 'react';
 
-async function fetchProductDetails(slug: string) {
-    const response = await axiosInstance.get(`/product/api/get-product/${slug}`);
-    return response.data.product;
-}
-
-export async function generateMetadata({
-    params,
-}: {
-    params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-    const { slug } = await params;
-    const product = await fetchProductDetails(slug);
-
-    return {
-        title: `${product?.title} | DevDrip`,
-        description:
-            product?.short_description ||
-            "Discover high quality products on DevDrip.com",
-        openGraph: {
-            title: product?.title,
-            description: product?.short_description || "",
-            images: [product?.images?.[0]?.url || "default-image.jpg"],
-            type: "website",
-        },
-        twitter: {
-            card: "summary_large_image",
-            title: product?.title,
-            description: product?.short_description || "",
-            images: [product?.images?.[0]?.url || "/default-image.jpg"],
-        },
-    };
-}
+export const metadata: Metadata = {
+    title: 'Product | SokoJamo',
+    description: 'View product details and shop securely on SokoJamo.',
+};
 
 const Page = async ({
     params,
@@ -42,8 +13,7 @@ const Page = async ({
     params: Promise<{ slug: string }>;
 }) => {
     const { slug } = await params;
-    const productDetails = await fetchProductDetails(slug);
-    return <ProductDetails productDetails={productDetails} />;
+    return <ProductPageClient slug={slug} />;
 };
 
 export default Page;

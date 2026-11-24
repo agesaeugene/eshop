@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from 'react';
 import toast from "react-hot-toast";
 
+const DELIVERY_FEE_KES = 300;
+
 const CartPage = () => {
     const router = useRouter();
     const { user } = useUser();
@@ -147,6 +149,7 @@ const CartPage = () => {
         (total: number, item: any) => total + item.quantity * item.sale_price,
         0
     );
+    const checkoutTotal = subtotal - discountAmount + (cart.length > 0 ? DELIVERY_FEE_KES : 0);
 
     return (
         <div className="w-full bg-white">
@@ -272,6 +275,10 @@ const CartPage = () => {
                                 <span className="font-jost">Subtotal</span>
                                 <span>Ksh {(subtotal - discountAmount).toFixed(2)}</span>
                             </div>
+                            <div className="flex justify-between items-center text-sm text-slate-600 pb-3">
+                                <span>Delivery fee</span>
+                                <span>Ksh {cart.length > 0 ? DELIVERY_FEE_KES.toFixed(2) : "0.00"}</span>
+                            </div>
                             <hr className="my-4 text-slate-200" />
                             <div className="mb-4">
                                 <h4 className="mb-[7px] font-[500] text-[15px]">
@@ -335,7 +342,7 @@ const CartPage = () => {
                                     <hr className="my-4 text-slate-200" />
                                     <div className="flex justify-between items-center text-[#010f1c] text-[20px] font-[550] pb-3">
                                         <span className="font-jost">Total</span>
-                                        <span>Ksh {(subtotal - discountAmount).toFixed(2)}</span>
+                                        <span>Ksh {checkoutTotal.toFixed(2)}</span>
                                     </div>
                                     <button
                                         onClick={createPaymentSession}

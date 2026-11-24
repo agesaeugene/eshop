@@ -18,7 +18,7 @@ import React, { useEffect, useState } from "react";
 import ProductCard from "../../components/cards/product-card";
 import useLocationTracking from "apps/user-ui/src/hooks/useLocationTracking";
 import useDeviceTracking from "apps/user-ui/src/hooks/useDeviceTracking";
-import useUser from "apps/user-ui/src/hooks/useUser";
+import useRequireAuth from "apps/user-ui/src/hooks/useRequiredAuth";
 import { sendKafkaEvent } from "apps/user-ui/src/actions/track-user";
 
 const TABS = ["Products", "Offers", "Reviews"];
@@ -50,7 +50,7 @@ const SellerProfile = ({
     const [followers, setFollowers] = useState(followersCount);
     const [isFollowing, setIsFollowing] = useState(false);
 
-    const { user } = useUser();
+    const { user, isloading: isUserLoading } = useRequireAuth();
     const location = useLocationTracking();
     const deviceInfo = useDeviceTracking();
     const queryClient = useQueryClient();
@@ -64,7 +64,7 @@ const SellerProfile = ({
             );
             return res.data.products;
         },
-        enabled: !!shop?.id,
+        enabled: !!shop?.id && !!user,
         staleTime: 1000 * 60 * 5,
     });
 
@@ -77,7 +77,7 @@ const SellerProfile = ({
             );
             return res.data.events;
         },
-        enabled: !!shop?.id && activeTab === "Offers",
+        enabled: !!shop?.id && !!user && activeTab === "Offers",
         staleTime: 1000 * 60 * 5,
     });
 
@@ -142,12 +142,16 @@ const SellerProfile = ({
 
     const socialLinks = (shop?.socialLinks ?? []) as any[];
 
+    if (isUserLoading || !user) {
+        return <div className="flex min-h-[50vh] items-center justify-center">Checking your account...</div>;
+    }
+
     return (
         <div>
             {/* Cover */}
             <div className="relative w-full flex justify-center">
                 <Image
-                    src={shop?.coverBanner || "/placeholder-cover.jpg"}
+                    src={shop?.coverBanner || "/placeholder-cover.svg"}
                     alt="Seller Cover"
                     className="w-full h-[400px] object-cover"
                     width={1200}
@@ -162,7 +166,7 @@ const SellerProfile = ({
                     <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
                         <div className="relative w-[100px] h-[100px] shrink-0 rounded-full border-4 border-slate-300 overflow-hidden">
                             <Image
-                                src={shop?.avatar?.url || "/placeholder-avatar.jpg"}
+                                src={shop?.avatar?.url || "/placeholder-avatar.svg"}
                                 alt="Seller Avatar"
                                 fill
                                 className="object-cover"

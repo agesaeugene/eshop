@@ -92,6 +92,12 @@ const CheckoutPage = () => {
                     <span className="text-sm text-slate-600">{isWalletPayment ? "Wallet payment" : "M-Pesa amount (KES)"}</span>
                     <strong className="text-xl text-slate-900">KES {Number(displayedAmount).toFixed(2)}</strong>
                 </div>
+                {session.kind === "purchase" && (
+                    <div className="mt-3 flex justify-between text-sm text-slate-600">
+                        <span>Delivery fee</span>
+                        <span>KES {Number(session.deliveryFee ?? 0).toFixed(2)}</span>
+                    </div>
+                )}
 
                 {isWalletPayment ? (
                     <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">

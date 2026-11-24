@@ -4,6 +4,7 @@ import ProfileIcon from '../../../assets/svgs/profile-icon';
 import HeartIcon from '../../../assets/svgs/heart-icon';
 import CartIcon from '../../../assets/svgs/cart-icon';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
 import HeaderBottom from './header-bottom';
 import useUser from 'apps/user-ui/src/hooks/useUser';
@@ -17,11 +18,19 @@ const Header = () => {
   const [searchValue, setSearchValue] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const router = useRouter();
 
   const { user, isloading } = useUser();
   const wishlist = useStore((state: any) => state.wishlist);
   const cart = useStore((state: any) => state.cart);
   const unreadNotificationCount = useUnreadNotificationCount(!!user);
+
+  const submitSearch = () => {
+    const query = searchValue.trim();
+    if (!query) return;
+    setIsMobileSearchOpen(false);
+    router.push(`/search?q=${encodeURIComponent(query)}`);
+  };
 
   useEffect(() => {
     if (!isloading) setActiveStoreUser(user?.id ?? null);
@@ -73,13 +82,20 @@ const Header = () => {
               `}</style>
               <div className="search-wrapper flex items-center gap-2">
                 <input
-                  type="text"
+                  type="search"
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      submitSearch();
+                    }
+                  }}
                   placeholder="Search products..."
                   className="search-input text-sm"
+                  aria-label="Search products"
                 />
-                <button type="button" className="flex items-center justify-center w-6 h-6 bg-transparent border-none cursor-pointer text-white">
+                <button type="button" onClick={submitSearch} className="flex items-center justify-center w-6 h-6 bg-transparent border-none cursor-pointer text-white" aria-label="Submit product search">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
@@ -161,16 +177,25 @@ const Header = () => {
         {isMobileSearchOpen && (
           <div className="sm:hidden px-4 pb-3">
             <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-400 shrink-0">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-              </svg>
+              <button type="button" onClick={submitSearch} aria-label="Submit product search" className="shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              </button>
               <input
-                type="text"
+                type="search"
                 autoFocus
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitSearch();
+                  }
+                }}
                 placeholder="Search products, brands..."
                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
+                aria-label="Search products"
               />
               {searchValue && (
                 <button onClick={() => setSearchValue('')} className="text-gray-400 hover:text-gray-600">

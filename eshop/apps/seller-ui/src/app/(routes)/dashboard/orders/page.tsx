@@ -50,6 +50,11 @@ const OrdersTable = () => {
                 cell: ({ row }: any) => <span>KES {Number(row.original.total).toFixed(2)}</span>,
             },
             {
+                accessorKey: "deliveryFee",
+                header: "Delivery fee",
+                cell: ({ row }: any) => <span>KES {Number(row.original.deliveryFee ?? 0).toFixed(2)}</span>,
+            },
+            {
                 accessorKey: "status",
                 header: "Status",
                 cell: ({ row }: any) => (

@@ -13,6 +13,7 @@ const useUserOrders = (enabled = true) =>
         },
         enabled,
         staleTime: 30_000,
+        refetchInterval: enabled ? 30_000 : false,
     });
 
 export default useUserOrders;

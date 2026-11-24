@@ -7,11 +7,11 @@ import { useParams, useRouter } from "next/navigation";
 
 
 const statuses = [
-    "Ordered",
-    "Packed",
-    "Shipped",
-    "Out for Delivery",
-    "Delivered",
+    { value: "ordered", label: "Ordered" },
+    { value: "packed", label: "Packed" },
+    { value: "shipped", label: "Shipped" },
+    { value: "out_for_delivery", label: "Out for Delivery" },
+    { value: "delivered", label: "Delivered" },
 ];
 
 const Page = () => {
@@ -96,7 +96,7 @@ const Page = () => {
         );
     }
 
-    const currentIndex = statuses.indexOf(order.deliveryStatus);
+    const currentIndex = statuses.findIndex((status) => status.value === order.deliveryStatus);
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-10">
@@ -135,15 +135,15 @@ const Page = () => {
                 >
                     {statuses.map((status, statusIndex) => (
                         <option
-                            key={status}
-                            value={status}
+                            key={status.value}
+                            value={status.value}
                             disabled={
                                 currentIndex >= 0 &&
                                 statusIndex < currentIndex
                             }
                             className="bg-gray-800 text-white"
                         >
-                            {status}
+                            {status.label}
                         </option>
                     ))}
                 </select>
@@ -158,13 +158,13 @@ const Page = () => {
                 {/* Status labels */}
                 <div className="flex items-center justify-between text-xs font-medium mb-2">
                     {statuses.map((step, idx) => {
-                        const current = step === order.deliveryStatus;
+                        const current = step.value === order.deliveryStatus;
                         const passed =
                             currentIndex >= 0 && currentIndex >= idx;
 
                         return (
                             <div
-                                key={step}
+                                key={step.value}
                                 className={`flex-1 ${
                                     current
                                         ? "text-blue-600"
@@ -173,7 +173,7 @@ const Page = () => {
                                         : "text-gray-400"
                                 }`}
                             >
-                                {step}
+                                {step.label}
                             </div>
                         );
                     })}
@@ -187,7 +187,7 @@ const Page = () => {
 
                         return (
                             <div
-                                key={step}
+                                key={step.value}
                                 className="flex-1 flex items-center"
                             >
                                 <div
@@ -233,9 +233,14 @@ const Page = () => {
                     </span>
 
                     <span className="font-medium">
-                        $
+                        KES{" "}
                         {Number(order.total ?? 0).toFixed(2)}
                     </span>
+                </p>
+
+                <p>
+                    <span className="font-semibold">Delivery Fee: </span>
+                    KES {Number(order.deliveryFee ?? 0).toFixed(2)}
                 </p>
 
                 {/* Discount */}
@@ -246,7 +251,7 @@ const Page = () => {
                         </span>
 
                         <span className="text-green-400">
-                            -$
+                            -KES{" "}
                             {Number(
                                 order.discountAmount
                             ).toFixed(2)}
@@ -258,7 +263,7 @@ const Page = () => {
                                     {order.couponCode.discountType ===
                                     "percentage"
                                         ? `${order.couponCode.discountValue}%`
-                                        : `$${order.couponCode.discountValue}`}{" "}
+                                        : `KES ${order.couponCode.discountValue}`}{" "}
                                     off)
                                 </>
                             )}

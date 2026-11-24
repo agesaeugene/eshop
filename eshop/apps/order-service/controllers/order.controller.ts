@@ -9,10 +9,12 @@ export const getSellerOrders = async (req: any, res: Response, next: NextFunctio
     try {
         const shop = await prisma.shops.findUnique({
             where: { sellerId: req.seller.id },
+            select: { id: true },
         });
+        if (!shop) return res.status(200).json({ success: true, orders: [] });
 
         const orders = await prisma.orders.findMany({
-            where: { shopId: shop?.id },
+            where: { shopId: shop.id },
             include: {
                 user: {
                     select: { id: true, name: true, email: true, avatar: true },
@@ -39,6 +41,18 @@ export const getOrderDetails = async (req: any, res: Response, next: NextFunctio
 
         if (!order) {
             return next(new NotFoundError("Order not found with the id!"));
+        }
+        if (req.role === "user" && order.userId !== req.user.id) {
+            return next(new NotFoundError("Order not found with the id!"));
+        }
+        if (req.role === "seller") {
+            const shop = await prisma.shops.findUnique({
+                where: { sellerId: req.seller.id },
+                select: { id: true },
+            });
+            if (!shop || shop.id !== order.shopId) {
+                return next(new NotFoundError("Order not found with the id!"));
+            }
         }
 
         const shippingAddress = order.shippingAddressId
@@ -94,20 +108,47 @@ export const updateDeliveryStatus = async (req: any, res: Response, next: NextFu
             return next(new ValidationError("Invalid delivery status."));
         }
 
-        const existingOrder = await prisma.orders.findUnique({
-            where: { id: orderId },
+        const shop = await prisma.shops.findUnique({
+            where: { sellerId: req.seller.id },
+            select: { id: true },
         });
+        const existingOrder = shop ? await prisma.orders.findFirst({
+            where: { id: orderId, shopId: shop.id },
+        }) : null;
 
         if (!existingOrder) {
             return next(new NotFoundError("Order not found!"));
         }
+        if (existingOrder.status.toLowerCase() !== "paid") {
+            return next(new ValidationError("Only confirmed paid orders can be updated."));
+        }
+        if (deliveryStatus === "cancelled") {
+            return next(new ValidationError("Contact support to cancel an order."));
+        }
+        const currentStatusIndex = DELIVERY_STATUSES.indexOf(existingOrder.deliveryStatus as DeliveryStatus);
+        const nextStatusIndex = DELIVERY_STATUSES.indexOf(deliveryStatus);
+        if (currentStatusIndex >= 0 && nextStatusIndex < currentStatusIndex) {
+            return next(new ValidationError("Delivery progress can only move forward."));
+        }
 
-        const updatedOrder = await prisma.orders.update({
-            where: { id: orderId },
-            data: { deliveryStatus, updatedAt: new Date() },
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+            const updated = await tx.orders.update({
+                where: { id: orderId },
+                data: { deliveryStatus, updatedAt: new Date() },
+            });
+            await tx.notifications.create({
+                data: {
+                    userId: existingOrder.userId,
+                    receiverId: existingOrder.userId,
+                    title: "Order progress updated",
+                    message: `Order #${existingOrder.id.slice(-8).toUpperCase()} is now ${deliveryStatus.replaceAll("_", " ")}.`,
+                    redirect_link: `/order/${existingOrder.id}`,
+                },
+            });
+            return updated;
         });
 
-        res.status(200).json({ success: true, order: updatedOrder });
+        return res.status(200).json({ success: true, order: updatedOrder });
     } catch (error) {
         next(error);
     }

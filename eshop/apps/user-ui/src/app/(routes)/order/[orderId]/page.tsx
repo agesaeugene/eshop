@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
 const STEPS = ["Ordered", "Packed", "Shipped", "Out for Delivery", "Delivered"];
+const normalizeStatus = (status: string) => status.replaceAll("_", " ").toLowerCase();
 
 const Page = () => {
     const params = useParams();
@@ -47,7 +48,7 @@ const Page = () => {
 
     // position of the current delivery status in the progress bar (defaults to the first step)
     const foundIndex = STEPS.findIndex(
-        (s) => s.toLowerCase() === (order.deliveryStatus || "").toLowerCase()
+        (s) => s.toLowerCase() === normalizeStatus(order.deliveryStatus || "")
     );
     const currentIndex = foundIndex === -1 ? 0 : foundIndex;
 
@@ -119,6 +120,11 @@ const Page = () => {
                     <span className="font-medium">
                         Ksh {Number(order.total).toFixed(2)}
                     </span>
+                </p>
+
+                <p>
+                    <span className="font-semibold">Delivery fee:</span>{" "}
+                    Ksh {Number(order.deliveryFee ?? 0).toFixed(2)}
                 </p>
 
                 {order.discountAmount > 0 && (

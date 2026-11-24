@@ -11,8 +11,13 @@ const swaggerDocument = require('./swagger-output.json');
 
 const app = express();
 
+const allowedOrigins = [
+  ...Array.from({ length: 10 }, (_, index) => `http://localhost:${3000 + index}`),
+  'http://localhost:6001',
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:6001'],
+  origin: allowedOrigins,
   allowedHeaders: ['Authorization', 'Content-Type', 'accept'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -6,6 +6,8 @@ import SectionTitle from "../shared/components/section/section-title";
 import ProductCard from "../shared/components/cards/product-card";
 import ShopCard from "../shared/components/cards/shop.card";
 import axiosInstance from "../utils/axiosInstance";
+import useRequireAuth from "../hooks/useRequiredAuth";
+import { useRouter } from "next/navigation";
 
 // Derive types from the card components so we don't need `any`
 type Product = React.ComponentProps<typeof ProductCard>["product"];
@@ -53,6 +55,7 @@ type SectionProps<T> = {
   isLoading: boolean;
   isError: boolean;
   emptyMessage: string;
+  onRetry: () => void;
   renderItem: (item: T) => React.ReactNode;
 };
 
@@ -62,6 +65,7 @@ function Section<T extends { id: string | number }>({
   isLoading,
   isError,
   emptyMessage,
+  onRetry,
   renderItem,
 }: SectionProps<T>) {
   return (
@@ -73,9 +77,12 @@ function Section<T extends { id: string | number }>({
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <p className="text-center text-red-500">
-          Something went wrong. Please try again later.
-        </p>
+        <div className="space-y-3 text-center text-red-500">
+          <p>Products are temporarily unavailable. Please try again.</p>
+          <button type="button" onClick={onRetry} className="rounded bg-blue-600 px-4 py-2 text-white">
+            Retry
+          </button>
+        </div>
       )}
 
       {!isLoading && !isError && items && items.length > 0 && (
@@ -91,29 +98,56 @@ function Section<T extends { id: string | number }>({
 
 // ---------- Page ----------
 const Page = () => {
+  const { user, isloading: isUserLoading } = useRequireAuth();
+  const router = useRouter();
   const products = useQuery({
     queryKey: ["products"],
     queryFn: () => fetchProducts(),
     staleTime: STALE_TIME,
+    enabled: !!user,
+    retry: false,
   });
 
   const latestProducts = useQuery({
     queryKey: ["latest-products"],
     queryFn: () => fetchProducts("latest"),
     staleTime: STALE_TIME,
+    enabled: !!user,
+    retry: false,
   });
 
   const shops = useQuery({
     queryKey: ["shops"],
     queryFn: fetchShops,
     staleTime: STALE_TIME,
+    enabled: !!user,
+    retry: false,
   });
 
   const offers = useQuery({
     queryKey: ["offers"],
     queryFn: fetchOffers,
     staleTime: STALE_TIME,
+    enabled: !!user,
+    retry: false,
   });
+
+  if (isUserLoading || !user) {
+    return (
+      <main className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <p className="mb-4 text-gray-600">Sign in to browse products and shops.</p>
+          <button
+            type="button"
+            onClick={() => router.replace("/login")}
+            className="rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+          >
+            Sign in
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="bg-[#f5f5f5]">
@@ -125,6 +159,7 @@ const Page = () => {
           isLoading={products.isLoading}
           isError={products.isError}
           emptyMessage="No products available yet!"
+          onRetry={() => void products.refetch()}
           renderItem={(product) => (
             <ProductCard key={product.id} product={product} />
           )}
@@ -136,6 +171,7 @@ const Page = () => {
           isLoading={latestProducts.isLoading}
           isError={latestProducts.isError}
           emptyMessage="No products available yet!"
+          onRetry={() => void latestProducts.refetch()}
           renderItem={(product) => (
             <ProductCard key={product.id} product={product} />
           )}
@@ -147,6 +183,7 @@ const Page = () => {
           isLoading={shops.isLoading}
           isError={shops.isError}
           emptyMessage="No shops available yet!"
+          onRetry={() => void shops.refetch()}
           renderItem={(shop) => <ShopCard key={shop.id} shop={shop} />}
         />
 
@@ -156,6 +193,7 @@ const Page = () => {
           isLoading={offers.isLoading}
           isError={offers.isError}
           emptyMessage="No offers available yet!"
+          onRetry={() => void offers.refetch()}
           renderItem={(product) => (
             <ProductCard key={product.id} product={product} isEvent={true} />
           )}

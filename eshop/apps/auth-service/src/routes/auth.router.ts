@@ -65,7 +65,7 @@ router.post("/seller-registration", registerSeller);
 router.post("/verify-seller", verifySeller);
 router.post("/create-shop", createShop);
 router.post("/login-seller", loginSeller);
-router.post("/refresh-token-seller", refreshToken);
+router.post("/refresh-token-seller", refreshSellerToken);
 router.get("/logged-in-seller", isAuthenticated, isSeller, getSeller);
 router.post("/seller/session-heartbeat", isAuthenticated, isSeller, heartbeatAccountActivity);
 router.get("/seller-settings", isAuthenticated, isSeller, getSellerSettings);

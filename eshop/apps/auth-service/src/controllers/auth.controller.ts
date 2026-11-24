@@ -7,7 +7,7 @@ import prisma from '@packages/libs/prisma';
 import { AuthError, NotFoundError, ValidationError } from '@packages/error-handler';
 import bcrypt from 'bcryptjs';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
-import { setCookie } from '../utils/cookies/setCookie';
+import { authCookieOptions, setCookie } from '../utils/cookies/setCookie';
 import redis from '@packages/libs/redis';
 import { sendLog } from "../utils/send-log";
 
@@ -52,7 +52,30 @@ const recordLogoutFromCookie = async (
 };
 
 const clearAuthCookie = (res: Response, cookieName: string) =>
-    res.clearCookie(cookieName, { httpOnly: true, secure: true, sameSite: "none" });
+    res.clearCookie(cookieName, authCookieOptions);
+
+const findUserForLogin = (email: string) =>
+    prisma.users.findFirst({
+        where: { email: { equals: email.trim(), mode: "insensitive" } },
+    });
+
+const findSellerForLogin = (email: string) =>
+    prisma.sellers.findFirst({
+        where: { email: { equals: email.trim(), mode: "insensitive" } },
+    });
+
+const createAuthTokens = (id: string, role: TrackedRole) => ({
+    accessToken: jwt.sign(
+        { id, role },
+        process.env.ACCESS_TOKEN_SECRET as string,
+        { expiresIn: "15m" }
+    ),
+    refreshToken: jwt.sign(
+        { id, role },
+        process.env.REFRESH_TOKEN_SECRET as string,
+        { expiresIn: "7d" }
+    ),
+});
 
 
 
@@ -168,40 +191,36 @@ export const loginUser = async (req: Request, res: Response, next: NextFunction)
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
+        if (typeof email !== "string" || !email.trim() || typeof password !== "string" || !password) {
             return next(new ValidationError("Email and password are required!"));
         }
 
-        const user = await prisma.users.findUnique({ where: { email } });
-        if (!user) return next(new AuthError("User does not exist!"));
+        const user = await findUserForLogin(email);
+        if (!user?.password) return next(new AuthError("Invalid email or password!"));
 
-        const isMatch = await bcrypt.compare(password, user.password!);
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return next(new AuthError("Invalid email or password!"));
         }
-        if (user.role === "admin") return next(new AuthError("Please sign in through the admin portal."));
 
-        res.clearCookie("seller-access-token");
-        res.clearCookie("seller-refresh-token");
-        res.clearCookie("admin-access-token");
-        res.clearCookie("admin-refresh-token");
+        const isAdmin = user.role === "admin";
+        clearAuthCookie(res, "seller-access-token");
+        clearAuthCookie(res, "seller-refresh-token");
+        if (!isAdmin) {
+            clearAuthCookie(res, "admin-access-token");
+            clearAuthCookie(res, "admin-refresh-token");
+        }
 
-        // Generating access and refresh tokens
-        const accessToken = jwt.sign(
-            { id: user.id, role: "user" },
-            process.env.ACCESS_TOKEN_SECRET as string,
-            { expiresIn: '15m' }
-        );
-        const refreshToken = jwt.sign(
-            { id: user.id, role: "user" },
-            process.env.REFRESH_TOKEN_SECRET!,
-            { expiresIn: '7d' }
-        );
+        const userTokens = createAuthTokens(user.id, "user");
 
-        // Storing the refresh token in a http only secure cookie
-        setCookie(res, "refresh_token", refreshToken);
-        setCookie(res, "access_token", accessToken);
-        await recordAccountActivity(user.id, "user", "login");
+        setCookie(res, "refresh_token", userTokens.refreshToken);
+        setCookie(res, "access_token", userTokens.accessToken);
+        if (isAdmin) {
+            const adminTokens = createAuthTokens(user.id, "admin");
+            setCookie(res, "admin-refresh-token", adminTokens.refreshToken);
+            setCookie(res, "admin-access-token", adminTokens.accessToken);
+        }
+        await recordAccountActivity(user.id, isAdmin ? "admin" : "user", "login");
 
         res.status(200).json({
             success: true,
@@ -219,8 +238,6 @@ export const refreshToken = async (req: any, res: Response, next: NextFunction) 
     try {
         const token =
             req.cookies["refresh_token"] ||
-            req.cookies["seller-refresh-token"] ||
-            req.cookies["admin-refresh-token"] ||
             req.headers.authorization?.split(" ")[1];
 
         if (!token) {
@@ -232,39 +249,25 @@ export const refreshToken = async (req: any, res: Response, next: NextFunction) 
             process.env.REFRESH_TOKEN_SECRET as string
         ) as { id: string; role?: string };
 
-        if (!decoded?.id || !decoded.role) {
+        if (!decoded?.id || decoded.role !== "user") {
             throw new JsonWebTokenError("Forbidden! Invalid refresh token! Please log in again.");
         }
 
-        let account: any = null;
-
-        if (decoded.role === "user") {
-            account = await prisma.users.findUnique({ where: { id: decoded.id } });
-        } else if (decoded.role === "seller") {
-            account = await prisma.sellers.findUnique({
-                where: { id: decoded.id },
-                include: { shop: true },
-            });
-        } else if (decoded.role === "admin") {
-            account = await prisma.users.findUnique({ where: { id: decoded.id } });
-            if (account && account.role !== "admin") account = null;
-        }
+        const account = await prisma.users.findUnique({ where: { id: decoded.id } });
 
         if (!account) {
             throw new AuthError("User not found! Please log in again.");
         }
 
         const newAccessToken = jwt.sign(
-            { id: decoded.id, role: decoded.role },
+            { id: decoded.id, role: "user" },
             process.env.ACCESS_TOKEN_SECRET as string,
             { expiresIn: "15m" }
         );
 
-        if (decoded.role === "user") setCookie(res, "access_token", newAccessToken);
-        else if (decoded.role === "seller") setCookie(res, "seller-access-token", newAccessToken);
-        else if (decoded.role === "admin") setCookie(res, "admin-access-token", newAccessToken);
+        setCookie(res, "access_token", newAccessToken);
 
-        req.role = decoded.role;
+        req.role = "user";
 
         res.status(200).json({
             success: true,
@@ -534,34 +537,26 @@ export const loginSeller = async (
         if (!email || !password)
             return next(new ValidationError("Email and password are required!"));
 
-        const seller = await prisma.sellers.findUnique({ where: { email } });
-        if (!seller) return next(new ValidationError("Invalid email or password!"));
+        if (typeof email !== "string" || typeof password !== "string") {
+            return next(new AuthError("Invalid email or password!"));
+        }
 
-        const isMatch = await bcrypt.compare(password, seller.password!);
+        const seller = await findSellerForLogin(email);
+        if (!seller) return next(new AuthError("Invalid email or password!"));
+
+        const isMatch = await bcrypt.compare(password, seller.password);
         if (!isMatch)
-            return next(new ValidationError("Invalid Email or Password"));
+            return next(new AuthError("Invalid email or password!"));
 
-        res.clearCookie("access_token");
-        res.clearCookie("refresh_token");
-        res.clearCookie("admin-access-token");
-        res.clearCookie("admin-refresh-token");
+        clearAuthCookie(res, "access_token");
+        clearAuthCookie(res, "refresh_token");
+        clearAuthCookie(res, "admin-access-token");
+        clearAuthCookie(res, "admin-refresh-token");
 
-        //Generating access tokens and refresh token
-        const accessToken = jwt.sign(
-            { id: seller.id, role: "seller" },
-            process.env.ACCESS_TOKEN_SECRET as string,
-            { expiresIn: "15m" }
-        );
+        const tokens = createAuthTokens(seller.id, "seller");
 
-        const refreshToken = jwt.sign(
-            { id: seller.id, role: "seller" },
-            process.env.REFRESH_TOKEN_SECRET as string,
-            { expiresIn: "7d" }
-        );
-
-        //storing refresh token
-        setCookie(res, "seller-refresh-token", refreshToken)
-        setCookie(res, "seller-access-token", accessToken)
+        setCookie(res, "seller-refresh-token", tokens.refreshToken);
+        setCookie(res, "seller-access-token", tokens.accessToken);
         await recordAccountActivity(seller.id, "seller", "login");
 
         res.status(200).json({
@@ -892,12 +887,16 @@ export const changeUserPassword = async (
     }
 };
 
-// Logout user: clear only the customer cookies
+// Logout through the customer portal. An admin account may also have customer
+// cookies when logged into this portal, so clear and record both roles safely.
 export const logoutUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         await recordLogoutFromCookie(req, "access_token", "user");
+        await recordLogoutFromCookie(req, "admin-access-token", "admin");
         clearAuthCookie(res, "access_token");
         clearAuthCookie(res, "refresh_token");
+        clearAuthCookie(res, "admin-access-token");
+        clearAuthCookie(res, "admin-refresh-token");
 
         res.status(200).json({
             success: true,
@@ -921,16 +920,20 @@ export const loginAdmin = async (
             return next(new ValidationError("Email and password are required!"));
         }
 
-        const user = await prisma.users.findUnique({ where: { email } });
+        if (typeof email !== "string" || typeof password !== "string") {
+            return next(new AuthError("Invalid email or password!"));
+        }
+
+        const user = await findUserForLogin(email);
 
         // same message for "no user" and "wrong password"
         if (!user || !user.password) {
-            return next(new AuthError("Invalid email or password"));
+            return next(new AuthError("Invalid email or password!"));
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return next(new AuthError("Invalid email or password"));
+            return next(new AuthError("Invalid email or password!"));
         }
 
         if (user.role !== "admin") {
@@ -939,28 +942,21 @@ export const loginAdmin = async (
                 message: `Admin login failed for ${email} - not an admin`,
                 source: "auth-service",
             });
-            return next(new AuthError("Invalid access!"));
+            return next(new AuthError("Invalid email or password!"));
         }
 
-        res.clearCookie("access_token");
-        res.clearCookie("refresh_token");
-        res.clearCookie("seller-access-token");
-        res.clearCookie("seller-refresh-token");
+        clearAuthCookie(res, "seller-access-token");
+        clearAuthCookie(res, "seller-refresh-token");
+        clearAuthCookie(res, "access_token");
+        clearAuthCookie(res, "refresh_token");
 
-        const accessToken = jwt.sign(
-            { id: user.id, role: "admin" },
-            process.env.ACCESS_TOKEN_SECRET as string,
-            { expiresIn: "15m" }
-        );
+        const adminTokens = createAuthTokens(user.id, "admin");
+        const userTokens = createAuthTokens(user.id, "user");
 
-        const refreshToken = jwt.sign(
-            { id: user.id, role: "admin" },
-            process.env.REFRESH_TOKEN_SECRET as string,
-            { expiresIn: "7d" }
-        );
-
-        setCookie(res, "admin-refresh-token", refreshToken);
-        setCookie(res, "admin-access-token", accessToken);
+        setCookie(res, "admin-refresh-token", adminTokens.refreshToken);
+        setCookie(res, "admin-access-token", adminTokens.accessToken);
+        setCookie(res, "refresh_token", userTokens.refreshToken);
+        setCookie(res, "access_token", userTokens.accessToken);
         await recordAccountActivity(user.id, "admin", "login");
 
         sendLog({
